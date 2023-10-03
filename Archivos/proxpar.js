@@ -1,7 +1,7 @@
 const { spawn } = require('child_process');
 
 function llamarProxparPy(client, usuario) {
-   const procesoproxparPy = spawn('python', ['C:\\Users\\manue\\OneDrive\\Escritorio\\AirFryers-bot\\Archivos\\proxpar.py']);
+   const procesoproxparPy = spawn('python', ['\\AirFryers-bot\\Archivos\\proxpar.py']);
    let salidaProxparPy = '';
 
    procesoproxparPy.stdout.on('data', (data) => {
