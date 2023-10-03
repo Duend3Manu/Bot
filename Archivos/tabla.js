@@ -1,7 +1,7 @@
 const { spawn } = require('child_process');
 
 function llamarTablaPy(client, usuario) {
-   const procesoTablaPy = spawn('python', ['C:\\Users\\manue\\OneDrive\\Escritorio\\AirFryers-bot\\Archivos\\tabla.py']);
+   const procesoTablaPy = spawn('python', ['\\AirFryers-bot\\Archivos\\tabla.py']);
    let salidaTablaPy = '';
 
    procesoTablaPy.stdout.on('data', (data) => {
