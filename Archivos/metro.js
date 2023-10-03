@@ -1,7 +1,7 @@
 const { spawn } = require('child_process');
 
 function llamarMetroPy(client, usuario) {
-   const procesometroPy = spawn('python', ['C:\\Users\\manue\\OneDrive\\Escritorio\\AirFryers-bot\\Archivos\\metro.py']);
+   const procesometroPy = spawn('python', ['\\AirFryers-bot\\Archivos\\metro.py']);
    let salidaMetroPy = '';
 
    procesometroPy.stdout.on('data', (data) => {
