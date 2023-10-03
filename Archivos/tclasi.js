@@ -1,7 +1,7 @@
 const { spawn } = require('child_process');
 
 function llamarTclasiPy(client, usuario) {
-   const procesoTclasiPy = spawn('python', ['C:\\Users\\manue\\OneDrive\\Escritorio\\AirFryers-bot\\Archivos\\tclasi.py']);
+   const procesoTclasiPy = spawn('python', ['\\AirFryers-bot\\Archivos\\tclasi.py']);
    let salidaTclasiPy = '';
 
    procesoTclasiPy.stdout.on('data', (data) => {
