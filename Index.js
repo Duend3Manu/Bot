@@ -662,22 +662,6 @@ client.on('message', async (msg) => {
   }
 });
 
-//Telegram
-
-client.on('message', async (message) => {
-  // Verifica si el mensaje comienza con el comando "!telegram" o "!Telegram"
-  if (message.body.toLowerCase().startsWith('!telegram')) {
-    const links = [
-      "1- URSS Ciberseg, Air's fryers NSFW: https://t.me/+bPut6KUDraJiNGUx",
-      "2- The Dark Side 🔞: https://t.me/+xozsv0b3LdBjOTYx"
-    ];
-    
-    // Envía los enlaces como respuestas individuales
-    for (const link of links) {
-      await message.reply(link);
-    }
-  }
-});
 
 // Inicia sesión en WhatsApp
 client.initialize();
