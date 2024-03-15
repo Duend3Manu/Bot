@@ -36,7 +36,6 @@ const metro = require('./Archivos/metro.js');
 const proxpar = require('./Archivos/proxpar.js');
 const tabla = require('./Archivos/tabla.js');
 const tclasi = require('./Archivos/tclasi.js');
-const libertadores = require('./Archivos/libertadores.js');
 const valores = require('./Archivos/valores.js');
 
 // Otras importaciones
@@ -215,13 +214,11 @@ client.on('message', async (msg) => {
   } else if (lowerCaseBody === '!tclasi') {
     tclasi.llamarTclasiPy(client, msg.from);
     client.sendMessage(msg.from, '⚽ Mostrando la tabla de clasificación.');
-  } else if (lowerCaseBody === '!libertadores') {
-    libertadores.llamarLibertadoresPy(client, msg.from);
-    client.sendMessage(msg.from, '⚽ Mostrando la tabla de clasificación copa Libertadores.');
   } else if (lowerCaseBody === '!valores') {
     valores.llamarValoresPy(client, msg.from);
     client.sendMessage(msg.from, 'Mostrando los Valores.');
   }
+
   
 });
 
@@ -246,7 +243,7 @@ function sendMenu(chatId) {
   ⚽ **Fútbol Chileno:**
   ⚽ !Tabla ⚽
   ⚽ !prox ⚽
-  ⚽ !libertadores ⚽
+
 
   ⚽ **Selección Chilena:**
   ⚽ !clasi ⚽
@@ -304,8 +301,6 @@ function sendMenu(chatId) {
   !ecaso : Eliminas un caso aislado (el último)
   !icaso : Listado de Casos Aislados
   
-  🌋CL !sismos - Para saber los últimos 5 sismos en Chile.
-  📞 !num o !tel - Para obtener información sobre un número de teléfono (formato 569********).
 
   *¡Diviértete* 🤖🚀
   `;
@@ -1018,76 +1013,6 @@ client.on('message', async (message) => {
   }
 });
 
-
-///celulizador
-
-client.on('message', async message => {
-  let phoneNumber = '';
-  if (message.body.startsWith('!tel') || message.body.startsWith('!num')) {
-      // Limpiar la variable phoneNumber de caracteres no deseados y extraer el número
-      phoneNumber = message.body.replace(/^!tel|^!num/g, '').replace(/[^\x20-\x7E]/g, '').trim();
-
-      if (phoneNumber) {
-          try {
-              // Agregar reacción de reloj de arena al mensaje original del usuario
-              await message.react('⏳');
-
-              let data = new FormData();
-              data.append('tlfWA', phoneNumber);
-
-              let config = {
-                  method: 'post',
-                  maxBodyLength: Infinity,
-                  url: 'https://celuzador.online/celuzadorApi.php',
-                  headers: { 
-                      'User-Agent': 'CeludeitorAPI-TuCulitoSacaLlamaAUFAUF', 
-                      ...data.getHeaders()
-                  },
-                  data: data
-              };
-
-              const response = await axios.request(config);
-
-              if (response.data.estado === 'correcto') {
-                  let regex = /\*Link Foto\* : (https?:\/\/[^\s]+)(?=\n\*Estado)/;
-                  let url = response.data.data.match(regex);
-
-                  if (url && url[1]) {
-                      console.log("URL encontrada:", url[1]);
-                      const media = await MessageMedia.fromUrl(url[1]);
-                      // Etiquetar al usuario en el mensaje
-                      await client.sendMessage(message.from, media, { caption: `ℹ️ Información del número ℹ️\n@${message.sender ? message.sender.id : ''} ${response.data.data}` });
-                  } else {
-                      console.log("URL no encontrada");
-                      // Etiquetar al usuario en el mensaje
-                      await client.sendMessage(message.from, `ℹ️ Información del número ℹ️\n@${message.sender ? message.sender.id : ''} ${response.data.data}`);
-                  }
-
-                  // Agregar reacción de check al mensaje original del usuario
-                  await message.react('☑️');
-              } else {
-                  // Etiquetar al usuario en el mensaje
-                  await message.reply(`@${message.sender ? message.sender.id : ''} ${response.data.data}`);
-                  // Agregar reacción de ❌ al mensaje original del usuario en caso de error
-                  await message.react('❌');
-              }
-          } catch (error) {
-              console.error("Error al enviar el mensaje:", error);
-              // Etiquetar al usuario en el mensaje
-              await message.reply(`@${message.sender ? message.sender.id : ''} ⚠️ Hubo un error al enviar el mensaje. Por favor, intenta nuevamente más tarde.`);
-              // Agregar reacción de ❌ al mensaje original del usuario en caso de error
-              await message.react('❌');
-          }
-      } else {
-          // Etiquetar al usuario en el mensaje
-          await message.reply(`@${message.sender ? message.sender.id : ''} ⚠️ Por favor, ingresa un número de teléfono después del comando.`);
-          // Agregar reacción de ❌ al mensaje original del usuario en caso de error
-          await message.react('❌');
-      }
-  }
-});
-
-
 /// Sismos ///
 
 client.on('message', async message => {
@@ -1138,63 +1063,6 @@ function formatFecha(fecha) {
   return { fechaHora, fechaSeparada };
 }
 
-///fapello//
-
-client.on('message', async (message) => {
-  if (message.body.startsWith('!fap')) {
-    const searchTerm = message.body.slice(5).trim();
-    if (!searchTerm) {
-      // Si no hay texto después del comando, enviar un mensaje indicando que se necesitan parámetros
-      client.sendMessage(message.from, 'Por favor ingresa un término de búsqueda después de !fap');
-      return;
-    }
-
-    try {
-      const response = await axios.post(
-        'https://celuzador.online/fappello.php',
-        new URLSearchParams({
-          'term': searchTerm
-        }),
-        {
-          headers: {
-            'User-Agent': 'CeludeitorAPI-TuCulitoSacaLlamaAUFAUF'
-          }
-        }
-      );
-      
-      const resultados = response.data;
-      
-      if (resultados && resultados.length > 0) {
-        let mensajeRespuesta = `Resultado de la búsqueda para "${searchTerm}":\n`;
-        
-        resultados.forEach((resultado, index) => {
-          mensajeRespuesta += `${index + 1}. ${resultado.name} - ${resultado.profile_url}\n`;
-        });
-        
-        // Enviar el resultado formateado al usuario
-        client.sendMessage(message.from, mensajeRespuesta);
-      } else {
-        client.sendMessage(message.from, 'Lo siento, no se encontraron resultados para tu búsqueda.');
-      }
-      
-    } catch (error) {
-      console.error('Error al realizar la búsqueda:', error);
-      // Manejo de errores
-      client.sendMessage(message.from, 'Lo siento, ha ocurrido un error al realizar la búsqueda.');
-    }
-  } else if (message.body === '!media') {
-    try {
-      const media = await MessageMedia.fromUrl('https://via.placeholder.com/350x150.png');
-      await client.sendMessage(message.from, media); // Enviar media al remitente del mensaje original
-      // También puedes enviar media a otro chat especificando el ID del chat como primer argumento
-      // Por ejemplo:
-      // await client.sendMessage('CHAT_ID', media, { caption: 'this is my caption' });
-    } catch (error) {
-      console.error('Error al enviar media:', error);
-      client.sendMessage(message.from, 'Lo siento, ha ocurrido un error al enviar la media.');
-    }
-  }
-});
 
 // Generador de rut//
 
