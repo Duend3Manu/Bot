@@ -6,7 +6,7 @@ from unidecode import unidecode
 urlas = 'https://chile.as.com/resultados/futbol/clasificacion_mundial_sudamerica/calendario/?omnil=mpal'
 page = requests.post(urlas)
 
-fechas_buscadas = ['12 Oct.']
+fechas_buscadas = ['04 Sept.', '09 Sept.']
 
 if page.status_code == 200:
     soup = BeautifulSoup(page.content, 'html.parser')

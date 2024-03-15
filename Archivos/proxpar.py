@@ -6,7 +6,7 @@ from unidecode import unidecode
 urlas = 'https://chile.as.com/resultados/futbol/chile/calendario/?omnil=mpal'
 page = requests.post(urlas)
 
-fecha_buscada = '06 - 08 Oct.'
+fecha_buscada = '15 - 17 Mar.'
 
 if page.status_code == 200:
     soup = BeautifulSoup(page.content, 'html.parser')
@@ -14,7 +14,6 @@ if page.status_code == 200:
     for jornada in jornadas:
         fechaJornada = jornada.find('h2').find('span').text.strip()
         if fechaJornada == fecha_buscada:
-            print('---------------------------------\n')
             print('---------------------------------\n')
             titulo = jornada.find('h2').find('a')
             print(unidecode(titulo.text), end=' : ')
@@ -26,5 +25,6 @@ if page.status_code == 200:
                 print(unidecode(partido.find('td', {"class": "col-resultado"}).text.strip()), end=' ')
                 print(unidecode(partido.find('td', {"class": "col-equipo-visitante"}).text.strip()))
                 print('\n')
+            print('---------------------------------\n')
 else:
     print("Error en request:", page.status_code)

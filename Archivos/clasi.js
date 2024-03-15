@@ -1,7 +1,7 @@
 const { spawn } = require('child_process');
 
 function llamarClasiPy(client, usuario) {
-   const procesoclasiPy = spawn('python', ['\\AirFryers-bot\\Archivos\\clasi.py']);
+   const procesoclasiPy = spawn('python', ['C:\\bots\\AirFryers-bot\\Archivos\\clasi.py']);
    let salidaClasiPy = '';
 
    procesoclasiPy.stdout.on('data', (data) => {

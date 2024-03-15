@@ -51,4 +51,6 @@ filename = "tabla.csv"  # Nombre fijo para el archivo CSV
 df.to_csv(filename, index=False, encoding='utf-8')
 
 # Imprimir tabla con líneas separadoras y posición
+print('-----------------------------------------------------\n')
 print(tabulate(df, headers='keys', tablefmt='plain', showindex=False, numalign='right'))
+print('-----------------------------------------------------\n')
