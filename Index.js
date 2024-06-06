@@ -7,13 +7,17 @@ const pathToFfmpeg = 'C:\\FFmpeg\\bin\\ffmpeg.exe';
 const sanitize = require('sanitize-filename'); // Biblioteca para limpiar nombres de archivo
 const streamBuffers = require('stream-buffers');
 const { htmlToText } = require('html-to-text');
-const puppeteer = require('puppeteer');
-const { Builder, By, Key, until } = require('selenium-webdriver');
+const { Builder, By, until } = require('selenium-webdriver'); // Importación única de selenium-webdriver
 const edge = require('selenium-webdriver/edge');
 const yargs = require('yargs');
 const { spawn } = require('child_process');
 const FormData = require('form-data');
-
+const puppeteer = require('puppeteer');
+const chrome = require('selenium-webdriver/chrome');
+const { exec } = require('child_process');
+const express = require('express');
+const app = express();
+const { generateWhatsAppMessage } = require('./SECTEST');  // Asegúrate de que la ruta es correcta
 
 // Importaciones de WhatsApp y qrcode
 const { Client, MessageMedia, LocalAuth } = require('whatsapp-web.js');
@@ -28,7 +32,12 @@ const GoogleIt = require('google-it');
 const Jimp = require('jimp');
 const moment = require('moment-timezone');
 const xvideos = require('@rodrigogs/xvideos');
-
+const InstagramScraper = require('instagram-scraper');
+const twitterVideoDownloader = require('twitter-video-downloader');
+const unorm = require('unorm');
+const iconv = require('iconv-lite');
+const { PythonShell } = require('python-shell');
+const { JSDOM } = require('jsdom');
 
 // Importaciones de módulos personalizados
 const clasi = require('./Archivos/clasi.js');
@@ -37,22 +46,46 @@ const proxpar = require('./Archivos/proxpar.js');
 const tabla = require('./Archivos/tabla.js');
 const tclasi = require('./Archivos/tclasi.js');
 const valores = require('./Archivos/valores.js');
+const TICKET_FILE_PATH = './ticket.json';
+const excelFilePath = 'resultados_copa_america.xlsx';
 
-// Otras importaciones
+// Otras importaciones //
 const opts = {};
-
+// Objeto para almacenar los tickets
+let tickets = {};
+// Crear archivo ticket.json si no existe
+if (!fs.existsSync(TICKET_FILE_PATH)) {
+  fs.writeFileSync(TICKET_FILE_PATH, '[]');
+}
 // Establecer idioma en español
 moment.locale('es');
 
-// Crear instancia del cliente de WhatsApp
+// Configuración del cliente de WhatsApp
+const webVersion = '2.2412.54';
 const client = new Client({
   authStrategy: new LocalAuth(),
+  puppeteer: { 
+    executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Ruta a Chrome en Windows
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu',
+    ]
+  },
+  webVersionCache: {
+    type: 'remote',
+    remotePath: `https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/${webVersion}.html`,
+  },
 });
 
 console.log("El bot se está conectando, por favor espere...");
 
 client.setMaxListeners(Infinity);
-
 
 // URL de la API de feriados
 const apiUrlFeriados = 'https://apis.digital.gob.cl/fl/feriados';
@@ -72,6 +105,7 @@ client.on('qr', (qrCode) => {
 client.on('ready', () => {
   console.log('AirFryers bot está listo');
 });
+
 
 // Evento que se activa cuando se recibe un mensaje
 client.on('message', async (msg) => {
@@ -113,28 +147,35 @@ client.on('message', async (msg) => {
       console.log('Error al obtener los valores:', error.message);
       client.sendMessage(msg.from, 'Ocurrió un error al obtener los valores.');
     }
-
+  }
     /// Feriados//
-  } else if (lowerCaseBody === '!feriados') {
-    try {
-      const today = moment().format('YYYY-MM-DD');
-      const response = await axios.get(apiUrlFeriados);
-      const feriados = response.data;
-
-      let replyMessage = '🥳 Próximos feriados:\n\n';
-      feriados.forEach((feriado) => {
-        if (moment(feriado.fecha).isAfter(today)) {
-          const formattedDate = moment(feriado.fecha).format('dddd - DD/MM/YY');
-          replyMessage += `- ${formattedDate}: ${feriado.nombre}\n`;
-        }
-      });
-
-      client.sendMessage(msg.from, replyMessage);
-    } catch (error) {
-      console.log('Error al obtener los feriados:', error.message);
-      client.sendMessage(msg.from, 'Ocurrió un error al obtener los feriados.');
-    }
-
+    else if (lowerCaseBody === '!feriados') {
+      try {
+          const today = moment().format('YYYY-MM-DD');
+          const response = await axios.get(apiUrlFeriados);
+          const feriados = response.data;
+  
+          let replyMessage = '🥳 Próximos feriados:\n\n';
+          let nextFeriados = 0;
+          feriados.forEach((feriado) => {
+              if (moment(feriado.fecha).isAfter(today) && nextFeriados < 5) {
+                  const formattedDate = moment(feriado.fecha).format('dddd - DD/MM/YY');
+                  replyMessage += `- ${formattedDate}: ${feriado.nombre}\n`;
+                  nextFeriados++;
+              }
+          });
+  
+          // Si no hay más feriados en la lista, se informa al usuario.
+          if (nextFeriados === 0) {
+              replyMessage = 'No se encontraron próximos feriados.';
+          }
+  
+          client.sendMessage(msg.from, replyMessage);
+      } catch (error) {
+          console.log('Error al obtener los feriados:', error.message);
+          client.sendMessage(msg.from, 'Ocurrió un error al obtener los feriados.');
+      }
+  
     /// Farmacias//
 
 } else if (lowerCaseBody.startsWith('!far')) {
@@ -197,9 +238,9 @@ client.on('message', async (msg) => {
   }
 }
   
-  //// Funciones ///
+  /// Funciones ///
 
-   else if (lowerCaseBody === '!tabla') {
+  else if (lowerCaseBody === '!tabla') {
     tabla.llamarTablaPy(client, msg.from);
     client.sendMessage(msg.from, '⚽ Mostrando la tabla de posiciones.');
   } else if (lowerCaseBody === '!metro') {
@@ -218,7 +259,6 @@ client.on('message', async (msg) => {
     valores.llamarValoresPy(client, msg.from);
     client.sendMessage(msg.from, 'Mostrando los Valores.');
   }
-
   
 });
 
@@ -226,25 +266,25 @@ client.on('message', async (msg) => {
 function sendMenu(chatId) {
   const menuMessage = `
   📜 *Comandos disponibles* 📜
-  
+
   🌤️ **Clima**
   🌤️ !clima 🌤️
-
+  
   💰 **Finanzas:**
   💵 !Valores 💵
+  💱 !cripto  💱 (debes agregar la moneda, ejemplo !cripto bnb)
   
   🥳 **Feriados:**
   🎉 !Feriados 🎉
   🎆 !18 🎆
-
+  
   🏥 **Farmacias de Turno:**
   🏥 !Far [ciudad] 🏥
   
   ⚽ **Fútbol Chileno:**
   ⚽ !Tabla ⚽
   ⚽ !prox ⚽
-
-
+  
   ⚽ **Selección Chilena:**
   ⚽ !clasi ⚽
   ⚽ !tclasi ⚽
@@ -255,58 +295,132 @@ function sendMenu(chatId) {
   🎰 **Juego:**
   !ccp ✊🖐️✌️(Cachipún) (Advertencia con los premios +18 👀👀)
   
-  🔍 **Búsqueda en Google:**
-  !G 🔍
-
-  🔎 **Búsqueda en Wikipedia:**
+  🔍 **Búsquedas:**
+  !G 🔎
   !Wiki 🔎
-
+  !yt 🔎  - (Realiza una búsqueda en Youtube)
+  
   🤖 **Bot repite texto:**
   !re 🤖
-
+  
   🤖 **Sticker Quietos o Con Movimiento:**
   !s 🤖 (Debes enviar la imagen, video o gif con el comando !s)
   
   🎵 **Audios:**
-  🎵 !aweonao 🎵
-  🎵 !caballo 🎵
-  🎵 !chamba 🎵
-  🎵 !doler 🎵
-  🎵 !dolor 🎵
-  🎵 !himno 🎵
-  🎵 !idea 🎵
-  🎵 !mataron 🎵
-  🎵 !mpenca 🎵
-  🎵 !muerte 🎵
-  🎵 !muerte2 🎵
-  🎵 !muerte3 🎵
-  🎵 !muerte4 🎵
-  🎵 !neme 🎵
-  🎵 !penca 🎵
-  🎵 !promo 🎵
-  🎵 !rata 🎵
-  🎵 !rico 🎵
-  🎵 !risa 🎵
-  🎵 !romeo 🎵
-  🎵 !shesaid🎵
-  🎵 !tigre 🎵
-  🎵 !viernes🎵
-  🎵 !yamete 🎵
-  🎵 !where 🎵
+  🎵 !sonidos o !audios 🎵 (Para ver los comandos de audio disponibles)
   
-
-  👮🏽👮🏽‍♀️🚨🚔🚓
-  **Casos Aislados:**
+  👮🏽👮🏽‍♀️🚨🚔🚓 **Casos Aislados:**
   !caso : Agregas un caso aislado
   !ecaso : Eliminas un caso aislado (el último)
   !icaso : Listado de Casos Aislados
   
+  🌋 **Información Geográfica:**
+  🌋 !sismos - Para saber los últimos 5 sismos en Chile.
+  📞 !num o !tel - Para obtener información sobre un número de teléfono (formato !num o !tel 569********).
+  🚌 !bus - Para obtener información sobre un paradero (!p nombre paradero)
+  🚗🏍️!restriccion: Restriccion vehicular en santiago 
+
+  🇨🇱 **Otros:**
+  📄 !ticket (!ticket razón , para ver los ticket solo ingresa !ticket)
+  🇨🇱 !trstatus: Estado de Transbank Developers
+  ♓ !horoscopo: Tanto zodiacal como chino
 
   *¡Diviértete* 🤖🚀
   `;
 
   client.sendMessage(chatId, menuMessage);
 }
+
+
+/// Sonidos ///
+
+// Función para enviar los comandos de audio
+function sendAudioCommands(chatId) {
+  const audioCommandsMessage = `
+  🎵 **Comandos de Audio** 🎵
+
+  🎵 !11
+  🎵 !aonde
+  🎵 !aweonao
+  🎵 !caballo
+  🎵 !callate
+  🎵 !callense
+  🎵 !cell
+  🎵 !chamba
+  🎵 !chaoctm
+  🎵 !chipi
+  🎵 !chistoso
+  🎵 !doler
+  🎵 !dolor
+  🎵 !falso  
+  🎵 !frio
+  🎵 !grillo
+  🎵 !himno
+  🎵 !himnoe
+  🎵 !idea
+  🎵 !idea2
+  🎵 !manualdeuso
+  🎵 !marcho
+  🎵 !material
+  🎵 !mataron
+  🎵 !miguel
+  🎵 !muerte
+  🎵 !muerte2
+  🎵 !muerte3
+  🎵 !muerte4
+  🎵 !miraesawea
+  🎵 !mpenca
+  🎵 !nada
+  🎵 !neme
+  🎵 !nocreo
+  🎵 !nohayplata
+  🎵 !noinsultes 
+  🎵 !oniichan
+  🎵 !pago
+  🎵 !pedro
+  🎵 !penca
+  🎵 !precio
+  🎵 !protegeme
+  🎵 !promo
+  🎵 !queeseso
+  🎵 !quepaso
+  🎵 !rata
+  🎵 !rico
+  🎵 !risa
+  🎵 !shesaid
+  🎵 !spiderman
+  🎵 !suceso
+  🎵 !tigre
+  🎵 !tpillamos
+  🎵 !tranquilo
+  🎵 !vamosc
+  🎵 !voluntad
+  🎵 !viernes
+  🎵 !wenak
+  🎵 !whisper
+  🎵 !whololo
+  🎵 !where
+  🎵 !yabasta
+  🎵 !yamete
+  🎵 !yfuera
+  🎵 !yque
+  `;
+  
+  client.sendMessage(chatId, audioCommandsMessage);
+}
+
+// Manejar los mensajes entrantes
+client.on('message', async (msg) => {
+  try {
+    const command = msg.body.toLowerCase();
+    if (command === '!sonidos' || command === '!audios') {
+      sendAudioCommands(msg.from);
+    }
+  } catch (error) {
+    console.error('Error al procesar el mensaje:', error);
+  }
+});
+
 
 // Función para obtener una respuesta aleatoria de un conjunto de respuestas
 function getRandomResponse(responses) {
@@ -527,97 +641,111 @@ client.on('message', async (message) => {
     }
 
 
-      ///// Frases Bot ///
-    const usedPhrases = [];
+      /// Frases Bot ///
 
-    function obtenerFraseAleatoria() {
-      let randomText = Math.floor(Math.random() * 24);
-      while (usedPhrases.includes(randomText)) {
-        randomText = Math.floor(Math.random() * 24);
+      const usedPhrases = [];
+
+      function obtenerFraseAleatoria() {
+        let randomText = Math.floor(Math.random() * 25);
+        while (usedPhrases.includes(randomText)) {
+          randomText = Math.floor(Math.random() * 25);
+        }
+        usedPhrases.push(randomText);
+      
+        if (usedPhrases.length === 5) {
+          usedPhrases.length = 0;
+        }
+      
+        return randomText;
       }
-      usedPhrases.push(randomText);
-    
-      if (usedPhrases.length === 5) {
-        usedPhrases.length = 0;
-      }
-    
-      return randomText;
+      
+      const frases = {
+        0: 'Dejame piola',
+        1: '¿Qué weá querí?',
+        2: 'Callao',
+        3: '¿Que onda compadre? ¿como estai? ¿te vine a molestar yo a ti? dejame piola, tranquilo ¿Que wea queri? ',
+        4: 'Jajaja, ya te cache, puro picarte a choro no mas, anda a webiar al paloma pulgón qliao ',
+        5: 'Lo siento, pero mis circuitos de humor están sobrecargados en este momento. ¡Beep boop! 😄',
+        6: 'te dire lo que el profesor rossa dijo una vez, Por que no te vay a webiar a otro lado',
+        7: '¡Error 404: Sentido del humor no encontrado! 😅',
+        8: 'No soy un bot, soy una IA con estilo. 😎',
+        9: '¡Atención, soy un bot de respuesta automática! Pero no puedo hacer café... aún. ☕',
+        10: 'Eso es lo que un bot diría. 🤖',
+        11: '¡Oh no, me has descubierto! Soy un bot maestro del disfraz. 😁',
+        12: 'Parece que llegó el comediante del grupo. 🤣',
+        13: 'El humor está de moda, y tú eres el líder. 😄👑',
+        14: 'Con ese humor, podrías competir en el festival de Viña del Mar. 🎤😄',
+        15: 'Voy a sacar mi caja de risa. Dame un momento... cric cric cric ♫ja ja ja ja jaaaa♫',
+        16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
+        17: 'jajajaja, ya llego el payaso al grupo, avisa para la otra 😄',
+        18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza 🍻 Y me gustan las chicas Y la cumbia me divierte y me excita.. ♫♫♫♫♫',
+        19: 'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
+        20: '♫♫♫ Me fui pal baile y me emborraché,miré una chica y me enamoré,era tan bella, era tan bella,la quería comer ♫♫♫',
+        21: 'Compa, ¿qué le parece esa morra?, La que anda bailando sola, me gusta pa mí, Bella, ella sabe que está buena , Que todos andan mirándola cómo baila ♫♫♫♫♫♫',
+        22: 'jajajaja, ya empezaste con tus amariconadas 🏳️‍🌈',
+        23: '♫♫♫ Tú sabes como soy Me gusta ser así, Me gusta la mujer y le cervecita 🍻 No te sientas mal, no te vas a enojar Amigo nada más de la cervecita ♫♫♫♫♫',
+        24: '♫♫♫ Y dice.... No me quiero ir a dormir, quiero seguir bailando, quiero seguir tomando, 🍷 vino hasta morir, No me quiero ir a dormir, quiero seguir tomando 🍷 , Quiero seguir bailando, cumbia hasta morir♫♫♫',
+      };
+      
+      client.on('message', async (msg) => {
+        const chat = await msg.getChat();
+        const contact = await msg.getContact();
+        const command = msg.body.toLowerCase();
+        let texto = '';
+      
+        if (/\b(bot|boot|bott|bbot|bboot|bboott)\b/.test(command)) {
+          await msg.react('🤡');
+          const randomText = obtenerFraseAleatoria();
+          texto = frases[randomText];
+      
+          await chat.sendMessage(`${texto} @${contact.id.user}`, {
+            mentions: [contact]
+          });
+        }
+      });
+
+  /// 11 ///
+  client.on('message', async (msg) => {
+    const chat = await msg.getChat();
+    const command = msg.body.toLowerCase();
+
+    // Verificar si el mensaje contiene alguna variante de "once", "onse", "onze" o "11"
+    if (/\b(onse?|once|onze?|11)\b/.test(command)) {
+        await msg.react('😂');
+        const contact = await msg.getContact();
+        // Enviar mensaje con mención al remitente del mensaje
+        await chat.sendMessage('Chupalo entonces @' + contact.id.user, { mentions: [contact] });
     }
-    
-    const frases = {
-      0: 'Dejame piola',
-      1: '¿Qué weá querí?',
-      2: 'Callao',
-      3: '¿Que onda compadre? ¿como estai? ¿te vine a molestar yo a ti? dejame piola, tranquilo ¿Que wea queri? ',
-      4: 'Jajaja, ya te cache, puro picarte a choro no mas, anda a webiar al paloma pulgón qliao ',
-      5: 'Lo siento, pero mis circuitos de humor están sobrecargados en este momento. ¡Beep boop! 😄',
-      6: 'te dire lo que el profesor rossa dijo una vez, Por que no te vay a webiar a otro lado',
-      7: '¡Error 404: Sentido del humor no encontrado! 😅',
-      8: 'No soy un bot, soy una IA con estilo. 😎',
-      9: '¡Atención, soy un bot de respuesta automática! Pero no puedo hacer café... aún. ☕',
-      10: 'Eso es lo que un bot diría. 🤖',
-      11: '¡Oh no, me has descubierto! Soy un bot maestro del disfraz. 😁',
-      12: 'Parece que llegó el comediante del grupo. 🤣',
-      13: 'El humor está de moda, y tú eres el líder. 😄👑',
-      14: 'Con ese humor, podrías competir en el festival de Viña del Mar. 🎤😄',
-      15: 'Voy a sacar mi caja de risa. Dame un momento... cric cric circ ♫ja ja ja ja jaaaa♫',
-      16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
-      17: 'jajajaja, ya llego el payaso al grupo, avisa para la otra 😄',
-      18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza 🍻 Y me gustan las chicas Y la cumbia me divierte y me excita.. ♫♫♫♫♫',
-      19: 'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
-      20: '♫♫♫ Me fui pal baile y me emborraché,miré una chica y me enamoré,era tan bella, era tan bella,la quería comer ♫♫♫',
-      21: 'Compa, ¿qué le parece esa morra?, La que anda bailando sola, me gusta pa mí, Bella, ella sabe que está buena , Que todos andan mirándola cómo baila ♫♫♫♫♫♫',
-      22: 'jajajaja, ya empezaste con tus amariconadas 🏳️‍🌈',
-      23: '♫♫♫ Tú sabes como soy Me gusta ser así, Me gusta la mujer y le cervecita 🍻 No te sientas mal, no te vas a enojar Amigo nada más de la cervecita ♫♫♫♫♫'
-    };
-    
+});
+
+
+   /// Todos ///
+
     client.on('message', async (msg) => {
-      const chat = await msg.getChat();
-      const contact = await msg.getContact();
-      const command = msg.body.toLowerCase();
-      let texto = '';
+      const commandPrefix = '!todos';
     
-      if (/\b(bot|boot|bott|bbot|bboot|bboott)\b/.test(command)) {
-        await msg.react('🤡');
-        const randomText = obtenerFraseAleatoria();
-        texto = frases[randomText];
+      if (msg.body.toLowerCase().startsWith(commandPrefix)) {
+        const chat = await msg.getChat();
+        const commandArgs = msg.body.slice(commandPrefix.length).trim();
     
-        await chat.sendMessage(`${texto} @${contact.id.user}`, {
-          mentions: [contact]
-        });
+        let text = "";
+    
+        if (commandArgs.length > 0) {
+          text = `${commandArgs}\n\n`;
+        }
+    
+        let mentions = [];
+    
+        for (let participant of chat.participants) {
+          mentions.push(`${participant.id.user}@c.us`);
+          text += `@${participant.id.user} `;
+        }
+    
+        await chat.sendMessage(text, { mentions });
       }
     });
     
-
-
-// funcion para llamar a todo el grupo 
-client.on('message', async (msg) => {
-  const commandPrefix = '!todos';
-
-  if (msg.body.toLowerCase().startsWith(commandPrefix)) {
-    const chat = await msg.getChat();
-    const commandArgs = msg.body.slice(commandPrefix.length).trim();
-
-    let text = "";
-
-    if (commandArgs.length > 0) {
-      text = `${commandArgs}\n\n`;
-    }
-
-    let mentions = [];
-
-    for (let participant of chat.participants) {
-      const contact = await client.getContactById(participant.id._serialized);
-
-      mentions.push(contact);
-      text += `@${participant.id.user} `;
-    }
-
-    await chat.sendMessage(text, { mentions });
-  }
-});
-
-//Audios
+/// Audios ///
 
 client.on('message', async (msg) => {
   const command = msg.body.toLowerCase();
@@ -694,12 +822,139 @@ client.on('message', async (msg) => {
   } else if (command === '!viernes') {
     await sendAudio('viernes.mp3', msg);
     await msg.react('😂');
+  } else if (command === '!lunes') {
+    await sendAudio('lunes.mp3', msg);
+    await msg.react('😂');  
+  } else if (command === '!yque') {
+    await sendAudio('yqm.mp3', msg);
+    await msg.react('😂');
   } else if (command === '!rico') {
     await sendAudio('rico.mp3', msg);
-    await msg.react('😂');  
-
-}   
-
+    await msg.react('😂');
+  }  else if (command === '!11') {
+      await sendAudio('11.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!callate') {
+      await sendAudio('callate.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!callense') {
+      await sendAudio('callense.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!cell') {
+      await sendAudio('cell.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!chaoctm') {
+      await sendAudio('chaoctm.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!chipi') {
+      await sendAudio('chipi.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!aonde') {
+      await sendAudio('donde.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!grillo') {
+      await sendAudio('grillo.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!material') {
+      await sendAudio('material.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!miguel') {
+      await sendAudio('miguel.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!miraesawea') {
+      await sendAudio('miraesawea.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!nohayplata') {
+      await sendAudio('nohayplata.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!oniichan') {
+      await sendAudio('onishan.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!pago') {
+      await sendAudio('pago.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!pedro') {
+      await sendAudio('pedro.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!protegeme') {
+      await sendAudio('protegeme.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!queeseso') {
+      await sendAudio('queeseso.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!chistoso') {
+      await sendAudio('risakeso.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!risa') {
+      await sendAudio('risakiko.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!marcho') {
+      await sendAudio('semarcho.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!spiderman') {
+      await sendAudio('spiderman.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!suceso') {
+      await sendAudio('suceso.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!tpillamos') {
+      await sendAudio('tepillamos.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!tranquilo') {
+      await sendAudio('tranquilo.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!vamosc') {
+      await sendAudio('vamoschilenos.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!voluntad') {
+      await sendAudio('voluntad.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!wenak') {
+      await sendAudio('wenacabros.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!whisper') {
+      await sendAudio('whisper.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!whololo') {
+      await sendAudio('whololo.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!noinsultes') {
+      await sendAudio('noinsultes.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!falso') {
+      await sendAudio('falso.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!frio') {
+      await sendAudio('frio.mp3', msg);
+      await msg.react('😂');           
+  } else if (command === '!yfuera') {
+      await sendAudio('yfuera.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!nocreo') {
+      await sendAudio('nocreo.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!yabasta') {
+      await sendAudio('BUENO BASTA.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!quepaso') {
+      await sendAudio('quepaso.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!nada') {
+      await sendAudio('nada.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!idea2') {
+      await sendAudio('idea2.mp3', msg);
+      await msg.react('😂');     
+  } else if (command === '!precio') {
+      await sendAudio('precio.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!manualdeuso') {
+      await sendAudio('manualdeuso.mp3', msg);
+      await msg.react('😂');      
+  } else if (command === '!himnoe') {
+      await sendAudio('urssespañol.mp3', msg);
+      await msg.react('🇷🇺');
+  }
 });
 
   async function sendAudio(audioFileName, msg) {
@@ -716,74 +971,83 @@ client.on('message', async (msg) => {
   }
 }
 
-//Caso Aislados Pacos
+/// Casos Aislados ///
 
-// Declara una variable para almacenar el contador y los casos, inicializados en 0 y un array vacío respectivamente.
-let contador = 0;
-let casos = [];
-
-// Cargar casos desde un archivo JSON si existe.
-if (fs.existsSync('casos.json')) {
-  casos = JSON.parse(fs.readFileSync('casos.json', 'utf8'));
-  contador = casos.length;
+// Función para cargar los casos desde el archivo casos.json
+function cargarCasos() {
+  try {
+      const data = fs.readFileSync('casos.json', 'utf8');
+      return JSON.parse(data);
+  } catch (err) {
+      console.error('Error al cargar los casos:', err);
+      return [];
+  }
 }
 
-// Evento para recibir mensajes
+let casos = cargarCasos(); // Definir casos y cargarlos desde el archivo JSON al inicio
+
+// Función para listar casos aislados y enviarlos por WhatsApp
+async function listarCasosAislados(msg) {
+// Obtener los casos desde la variable
+const casos = cargarCasos();
+
+// Verificar si hay casos registrados
+if (casos.length > 0) {
+    let respuesta = '///// Casos Aislados ////\n';
+    let urlsUnicas = []; // Lista para almacenar las URLs únicas
+    
+    casos.forEach((caso, index) => {
+        // Verificar si la URL ya se ha impreso antes
+        if (!urlsUnicas.includes(caso.enlace)) {
+            respuesta += `${index + 1}. ${caso.descripcion}\n${caso.enlace}\n`;
+            urlsUnicas.push(caso.enlace); // Agregar la URL a la lista de URLs impresas
+        }
+    });
+
+    // Enviar la lista de casos
+    await msg.reply(respuesta);
+
+    // Enviar la cantidad de casos
+    await msg.reply(`Actualmente hay ${casos.length} casos registrados.`);
+} else {
+    await msg.reply('No hay casos registrados.');
+}
+}
+
 client.on('message', async (msg) => {
   const command = msg.body.toLowerCase();
 
   if (command.startsWith('!caso')) {
-    // Obtener el mensaje sin el comando.
-    const mensajeCaso = msg.body.replace('!caso', '').trim();
-
-    // Incrementa el contador en 1.
-    contador++;
-
-    // Crear un objeto de caso con descripción y enlace.
-    const nuevoCaso = {
-      descripcion: `Caso Aislado Número ${contador}: ${mensajeCaso}`,
-      enlace: mensajeCaso,
-    };
-
-    // Guarda el caso en el arreglo de casos.
-    casos.push(nuevoCaso);
-
-    // Guarda los casos en el archivo JSON.
-    fs.writeFileSync('casos.json', JSON.stringify(casos), 'utf8');
-
-    // Envía un mensaje de confirmación.
-    await msg.reply(`Caso Aislado Número ${contador} registrado: ${mensajeCaso}`);
-  } else if (command === '!ecaso') {
-    // Verifica si hay casos para eliminar.
-    if (contador > 0) {
-      // Elimina el último caso del arreglo de casos.
-      casos.pop();
-
-      // Decrementa el contador en 1.
-      contador--;
-
-      // Guarda los casos actualizados en el archivo JSON.
+      const mensajeCaso = msg.body.replace('!caso', '').trim();
+      
+      const nuevoCaso = {
+          descripcion: `Caso Aislado Número ${casos.length + 1}: ${mensajeCaso}`,
+          enlace: mensajeCaso,
+          fecha_ingreso: new Date().toISOString() // Agregar marca de tiempo de ingreso
+      };
+      
+      casos.push(nuevoCaso);
+      
       fs.writeFileSync('casos.json', JSON.stringify(casos), 'utf8');
-
-      // Envía un mensaje de confirmación.
-      await msg.reply(`Se eliminó un caso, ahora hay ${contador} casos.`);
-    } else {
-      await msg.reply('No se pueden eliminar más casos, el contador ya está en 0.');
-    }
+      
+      await msg.reply(`Caso Aislado Número ${casos.length} registrado: ${mensajeCaso}`);
+  } else if (command === '!ecaso') {
+      if (casos.length > 0) {
+          casos.pop();
+          
+          fs.writeFileSync('casos.json', JSON.stringify(casos), 'utf8');
+          
+          await msg.reply(`Se eliminó un caso, ahora hay ${casos.length} casos.`);
+      } else {
+          await msg.reply('No se pueden eliminar más casos, no hay casos registrados.');
+      }
   } else if (command === '!icaso') {
-    // Muestra la lista de casos como un índice con enlaces.
-    if (casos.length > 0) {
-      const listaCasos = casos.map((caso, index) => `${index + 1}. ${caso.descripcion}`);
-      const respuesta = `Lista de Casos Aislados:\n${listaCasos.join('\n')}`;
-      await msg.reply(respuesta);
-    } else {
-      await msg.reply('No hay casos registrados.');
-    }
+      await listarCasosAislados(msg); // Llamar a la función para listar y enviar los casos
   }
 });
 
 
-///////////////////Sticker//////////////////////
+/// Sticker ///
 
 client.on('message', async (message) => {
   const isStickerCommand = message.body.toLowerCase() === '!s';
@@ -812,7 +1076,7 @@ client.on('message', async (message) => {
 });
 
 
-//Chistes
+/// Chistes ///
 
 const sentChistes = [];
 
@@ -868,54 +1132,81 @@ async function sendRandomAudio(chistes, msg) {
   }
 }
 
+/// PING ///
 
-//ping///
-client.on('message', handlePingCommand);
+// Función para realizar múltiples mediciones de ping y calcular la media
+async function performPingMeasurements(numMeasurements) {
+  const pingTimes = [];
+  const lagTimes = [];
 
-async function handlePingCommand(message) {
-  try {
-    // Verifica si el mensaje comienza con '!ping'
-    if (message.body.startsWith('!ping')) {
-      // Mide el tiempo de inicio
-      const startTime = Date.now();
+  for (let i = 0; i < numMeasurements; i++) {
+      const { startTime, endTime } = await measurePing();
+      const pingTime = endTime - startTime;
+      const lag = endTime - startTime - pingTime;
 
-      // Envía un mensaje de respuesta al mismo número para medir el lag
-      await sendPingResponse(message);
-
-      // Calcula el tiempo total y el lag
-      const { pingTime, lag } = calculateTimes(startTime);
-
-      // Envía un mensaje con los resultados y reacciona con un emoticon de rana o sapo
-      await sendResultsAndReact(message, pingTime, lag);
-    }
-  } catch (error) {
-    console.error('Error al manejar el comando !ping:', error.message);
+      pingTimes.push(pingTime);
+      lagTimes.push(lag);
   }
+
+  return {
+      averagePingTime: calculateAverage(pingTimes),
+      averageLag: calculateAverage(lagTimes)
+  };
 }
 
-async function sendPingResponse(message) {
-  // Envía un mensaje al mismo número para medir el lag
-  await client.sendMessage(message.from, 'Pong!');
-}
-
-function calculateTimes(startTime) {
-  // Calcula el tiempo total y el lag
+// Función para medir el ping y el lag
+async function measurePing() {
+  const startTime = Date.now();
+  await sendPingResponse();
   const endTime = Date.now();
-  const pingTime = endTime - startTime;
-  const lag = endTime - startTime - pingTime;
-
-  return { pingTime, lag };
+  return { startTime, endTime };
 }
 
-async function sendResultsAndReact(message, pingTime, lag) {
+// Envía un mensaje de ping al mismo número
+async function sendPingResponse() {
+  // Simulamos un tiempo de respuesta aleatorio entre 100 y 500 ms
+  const responseTime = Math.floor(Math.random() * (500 - 100 + 1)) + 100;
+  await new Promise(resolve => setTimeout(resolve, responseTime));
+}
+
+// Función para calcular el promedio de una matriz de números
+function calculateAverage(numbers) {
+  const sum = numbers.reduce((acc, curr) => acc + curr, 0);
+  return sum / numbers.length;
+}
+
+// Manejo del comando !ping
+client.on('message', async (message) => {
+  try {
+      if (message.body.startsWith('!ping')) {
+          const usuario = message.from;
+          const numMeasurements = 3; // Número de mediciones de ping a realizar
+
+          // Realiza múltiples mediciones de ping y calcula el promedio
+          const { averagePingTime, averageLag } = await performPingMeasurements(numMeasurements);
+
+          // Envía un mensaje con los resultados y reacciona con un emoticon de rana o sapo
+          await sendResultsAndReact(message, averagePingTime, averageLag);
+      }
+  } catch (error) {
+      console.error('Error al manejar el comando !ping:', error.message);
+  }
+});
+
+// Función para enviar los resultados y reaccionar con un emoticon de rana o sapo
+async function sendResultsAndReact(message, averagePingTime, averageLag) {
+  // Redondear los valores a dos decimales
+  const roundedPingTime = Math.round(averagePingTime * 100) / 100;
+  const roundedLag = Math.round(averageLag * 100) / 100;
+
   // Envía un mensaje con los resultados
-  await message.reply(`Mi ping es de: ${pingTime} ms, y mi Lag es de: ${lag} ms`);
+  await message.reply(`El ping promedio es de: ${roundedPingTime.toFixed(2)} ms, y el Lag promedio es de: ${roundedLag.toFixed(2)} ms`);
 
   // Reacciona con un emoticon de rana o sapo
   await message.react('🐸');
 }
 
-/// Videos +18 ////
+/// Videos +18 ///
 
 client.on('message', async (msg) => {
   const lowerCaseBody = msg.body.toLowerCase();
@@ -983,8 +1274,25 @@ function getDurationInSeconds(duration) {
   return 0;
 }
 
-//Clima
+/// Clima ///
 
+// Mapeo de condiciones climáticas de inglés a español
+const traduccionesClima = {
+  "Clear": "Despejado",
+  "Partly cloudy": "Parcialmente nublado",
+  "Cloudy": "Nublado",
+  "Overcast": "Cubierto",
+  "Mist": "Niebla",
+  "Patchy rain possible": "Posible lluvia irregular",
+  "Light rain": "Lluvia ligera",
+  "Moderate rain": "Lluvia moderada",
+  "Heavy rain": "Lluvia fuerte",
+  "Thunderstorm": "Tormenta",
+  "Snow": "Nieve",
+  // Agrega más condiciones y sus traducciones según sea necesario
+};
+
+// Función para obtener el clima de una ciudad
 async function obtenerClima(ciudad) {
   try {
     const response = await axios.get(`https://wttr.in/${ciudad}?format=%t+%C+%h+%w+%P`);
@@ -995,23 +1303,110 @@ async function obtenerClima(ciudad) {
   }
 }
 
+// Función para traducir la condición climática
+function traducirCondicion(condicion) {
+  return traduccionesClima[condicion] || condicion;
+}
+
 // Manejar los mensajes entrantes
 client.on('message', async (message) => {
   const commandRegex = /^!clima (.+)/;
   const match = message.body.match(commandRegex);
 
   if (match) {
-    const ciudad = match[1];
+    const ciudad = match[1].trim();
 
     try {
       const clima = await obtenerClima(ciudad);
-      const respuesta = `El clima en ${ciudad.charAt(0).toUpperCase() + ciudad.slice(1)} es: ${clima}`;
+      const climaArray = clima.split(' ');
+
+      const temperatura = climaArray[0];
+      const condicion = climaArray.slice(1, climaArray.length - 3).join(' '); // Esto asume que la condición puede ser más de una palabra
+      const humedad = climaArray[climaArray.length - 3];
+
+      // Traducir la condición climática
+      const condicionTraducida = traducirCondicion(condicion);
+
+      // Formatear la respuesta
+      const respuesta = `El clima en ${ciudad.charAt(0).toUpperCase() + ciudad.slice(1)} es: ${temperatura}, ${condicionTraducida}, ${humedad}`;
+      
       await message.reply(respuesta);
     } catch (error) {
       console.error('Error al procesar el comando !clima:', error);
+      await message.reply('Lo siento, no pude obtener el clima en este momento. Por favor, inténtalo más tarde.');
     }
   }
 });
+
+
+/// celulizador ///
+
+client.on('message', async message => {
+  let phoneNumber = '';
+  if (message.body.startsWith('!tel') || message.body.startsWith('!num')) {
+      // Limpiar la variable phoneNumber de caracteres no deseados y extraer el número
+      phoneNumber = message.body.replace(/^!tel|^!num/g, '').replace(/[^\x20-\x7E]/g, '').trim();
+
+      if (phoneNumber) {
+          try {
+              // Agregar reacción de reloj de arena al mensaje original del usuario
+              await message.react('⏳');
+
+              let data = new FormData();
+              data.append('tlfWA', phoneNumber);
+
+              let config = {
+                  method: 'post',
+                  maxBodyLength: Infinity,
+                  url: 'https://celuzador.online/celuzadorApi.php',
+                  headers: { 
+                      'User-Agent': 'CeludeitorAPI-TuCulitoSacaLlamaAUFAUF', 
+                      ...data.getHeaders()
+                  },
+                  data: data
+              };
+
+              const response = await axios.request(config);
+
+              if (response.data.estado === 'correcto') {
+                  let regex = /\*Link Foto\* : (https?:\/\/[^\s]+)(?=\n\*Estado)/;
+                  let url = response.data.data.match(regex);
+
+                  if (url && url[1]) {
+                      console.log("URL encontrada:", url[1]);
+                      const media = await MessageMedia.fromUrl(url[1]);
+                      // Etiquetar al usuario en el mensaje
+                      await client.sendMessage(message.from, media, { caption: `ℹ️ Información del número ℹ️\n@${message.sender ? message.sender.id : ''} ${response.data.data}` });
+                  } else {
+                      console.log("URL no encontrada");
+                      // Etiquetar al usuario en el mensaje
+                      await client.sendMessage(message.from, `ℹ️ Información del número ℹ️\n@${message.sender ? message.sender.id : ''} ${response.data.data}`);
+                  }
+
+                  // Agregar reacción de check al mensaje original del usuario
+                  await message.react('☑️');
+              } else {
+                  // Etiquetar al usuario en el mensaje
+                  await message.reply(`@${message.sender ? message.sender.id : ''} ${response.data.data}`);
+                  // Agregar reacción de ❌ al mensaje original del usuario en caso de error
+                  await message.react('❌');
+              }
+          } catch (error) {
+              console.error("Error al enviar el mensaje:", error);
+              // Etiquetar al usuario en el mensaje
+              await message.reply(`@${message.sender ? message.sender.id : ''} ⚠️ Hubo un error al enviar el mensaje. Por favor, intenta nuevamente más tarde.`);
+              // Agregar reacción de ❌ al mensaje original del usuario en caso de error
+              await message.react('❌');
+          }
+      } else {
+          // Etiquetar al usuario en el mensaje
+          await message.reply(`@${message.sender ? message.sender.id : ''} ⚠️ Por favor, ingresa un número de teléfono después del comando.`);
+          // Agregar reacción de ❌ al mensaje original del usuario en caso de error
+          await message.react('❌');
+      }
+  }
+});
+
 
 /// Sismos ///
 
@@ -1063,56 +1458,680 @@ function formatFecha(fecha) {
   return { fechaHora, fechaSeparada };
 }
 
+///fapello//
 
-// Generador de rut//
+client.on('message', async (message) => {
+  if (message.body.startsWith('!fap')) {
+    const searchTerm = message.body.slice(5).trim();
+    if (!searchTerm) {
+      // Si no hay texto después del comando, enviar un mensaje indicando que se necesitan parámetros
+      client.sendMessage(message.from, 'Por favor ingresa un término de búsqueda después de !fap');
+      return;
+    }
 
-client.on('message', async (msg) => {
-  if (msg.body === '!rut') {
-      generarRUTsMaximoSeis().then(ruts => {
-          const reply = ruts.join('\n');
-          msg.reply(reply);
-      }).catch(error => {
-          console.error('Error generando RUTs:', error);
-          msg.reply('Ocurrió un error al generar los RUTs.');
-      });
+    try {
+      const response = await axios.post(
+        'https://celuzador.online/fappello.php',
+        new URLSearchParams({
+          'term': searchTerm
+        }),
+        {
+          headers: {
+            'User-Agent': 'CeludeitorAPI-TuCulitoSacaLlamaAUFAUF'
+          }
+        }
+      );
+      
+      const resultados = response.data;
+      
+      if (resultados && resultados.length > 0) {
+        let mensajeRespuesta = `Resultado de la búsqueda para "${searchTerm}":\n`;
+        
+        resultados.forEach((resultado, index) => {
+          mensajeRespuesta += `${index + 1}. ${resultado.name} - ${resultado.profile_url}\n`;
+        });
+        
+        // Enviar el resultado formateado al usuario
+        client.sendMessage(message.from, mensajeRespuesta);
+      } else {
+        client.sendMessage(message.from, 'Lo siento, no se encontraron resultados para tu búsqueda.');
+      }
+      
+    } catch (error) {
+      console.error('Error al realizar la búsqueda:', error);
+      // Manejo de errores
+      client.sendMessage(message.from, 'Lo siento, ha ocurrido un error al realizar la búsqueda.');
+    }
+  } else if (message.body === '!media') {
+    try {
+      const media = await MessageMedia.fromUrl('https://via.placeholder.com/350x150.png');
+      await client.sendMessage(message.from, media); // Enviar media al remitente del mensaje original
+      // También puedes enviar media a otro chat especificando el ID del chat como primer argumento
+      // Por ejemplo:
+      // await client.sendMessage('CHAT_ID', media, { caption: 'this is my caption' });
+    } catch (error) {
+      console.error('Error al enviar media:', error);
+      client.sendMessage(message.from, 'Lo siento, ha ocurrido un error al enviar la media.');
+    }
   }
 });
 
-// Esta función genera 6 RUTs aleatorios
-async function generarRUTsMaximoSeis() {
-  const ruts = [];
-  const minValue = 1000000;
-  const maxValue = 40000000;
 
-  for (let i = 0; i < 6; i++) {
-      const randomNumber = Math.floor(Math.random() * (maxValue - minValue + 1)) + minValue;
-      const mod = getMod(randomNumber);
-      ruts.push(`${formatNumber(randomNumber)}-${mod}`);
+///Paradero///
+
+client.on('message', async message => {
+  if (message.body.startsWith('!bus')) {
+      const args = message.body.slice(4).trim().split(/ +/); // Corregido para que incluya el código de paradero correctamente
+      const codigo_paradero = args[0];
+
+      try {
+          const browser = await puppeteer.launch();
+          const page = await browser.newPage();
+
+          // Envía un mensaje al usuario indicando que se está obteniendo la información
+          const sentMessage = await message.reply('Espere un momento por favor mientras obtengo la información.');
+
+          // Añadir reacción de "reloj de arena" al mensaje del usuario
+          await sentMessage.react('⏳');
+
+          const base_url = "https://www.red.cl/planifica-tu-viaje/cuando-llega/?codsimt=";
+          const url = base_url + codigo_paradero;
+
+          await page.goto(url);
+
+          // Espera a que el paradero esté disponible
+          await page.waitForSelector('.nombre-parada', { timeout: 20000 }); // Aumentar el tiempo de espera a 20 segundos
+
+          const nombre_paradero = await page.$eval('.nombre-parada', element => element.textContent.trim());
+
+          let response = `📍 Nombre del paradero: ${nombre_paradero}\n🚏 Código del paradero: ${codigo_paradero}\n\n`;
+
+          const tabla_recorridos = await page.$('#nav-00');
+          const filas = await tabla_recorridos.$$('tr');
+
+          for (let i = 1; i < filas.length; i++) {
+              const numero_bus = await filas[i].$eval('.bus', element => element.textContent.trim());
+              const destino = await filas[i].$$eval('.td-dividido', elements => elements[1].textContent.trim());
+              const tiempo_llegada = await filas[i].$eval('.td-right', element => element.textContent.trim());
+
+              // Asignar emojis según el número del bus
+              let emoji = '';
+              switch (numero_bus) {
+                  case '348':
+                  case 'I07':
+                  case '109N':
+                  case '432N':
+                      emoji = '🚌';
+                      break;
+                  // Agregar más casos según sea necesario
+                  default:
+                      emoji = '🚌'; // Emoticono predeterminado
+              }
+
+              response += `${emoji} Recorrido: Bus ${numero_bus}\n🗺️ Dirección: ${destino}\n⏰ Tiempo de llegada: ${tiempo_llegada}\n\n`;
+          }
+
+          await browser.close();
+
+          // Envía el mensaje con la respuesta al mensaje del usuario correcto
+          await message.reply(response);
+
+          // Añadir reacción de "dedo arriba" al mensaje del usuario
+          await message.react('👍');
+      } catch (error) {
+          // Si hay un error al obtener la información, envía un mensaje de error al usuario
+          console.error('Error:', error.message);
+          await message.reply('Pajaron qliao no se pudo obtener la información del paradero');
+
+          // Añadir reacción de "X" al mensaje del usuario
+          await message.react('❌');
+      }
   }
+});
 
-  return ruts;
+
+/// Bencineras ///
+
+client.on('message', async msg => {
+    if (msg.body.startsWith('!bencina') || msg.body.startsWith('!Bencina')) {
+        const comuna = msg.body.substring(msg.body.indexOf(' ') + 1).trim(); // Obtener la comuna después del primer espacio
+        const python = spawn('python', [path.join(__dirname, 'bencina.py'), comuna]);
+        
+        msg.reply('Espere un momento... ⏳').then(() => {
+            msg.react('⌛');
+        });
+
+        python.on('error', (err) => {
+            console.error('Error al ejecutar el script de Python:', err);
+            msg.reply('Ocurrió un error al obtener los datos de bencina.');
+        });
+
+        python.on('close', (code) => {
+            console.log(`child process exited with code ${code}`);
+            if (code !== 0) {
+                msg.reply('Error al obtener los datos de bencina.');
+                msg.react('❌');
+                return;
+            }
+
+            const outputFile = path.join(__dirname, 'output.txt');
+            fs.readFile(outputFile, 'utf8', (err, data) => {
+                if (err) {
+                    console.error('Error al leer el archivo de salida:', err);
+                    msg.reply('Ocurrió un error al leer los datos de bencina.');
+                    msg.react('❌');
+                    return;
+                }
+
+                if (data.trim() === '') {
+                    msg.reply('No se encontraron datos para esa comuna, aweonao.');
+                    msg.react('❌');
+                    return;
+                }
+
+                msg.reply(data);
+                msg.react('✅');
+            });
+        });
+    }
+});
+
+
+
+/// Criptomonedas ///
+
+
+// Función para buscar el ID de una criptomoneda a partir de su nombre
+async function getCoinId(coinName) {
+    try {
+        const response = await axios.get(`https://api.coingecko.com/api/v3/coins/list`);
+        const coins = response.data;
+        const coin = coins.find(c => c.name.toLowerCase() === coinName.toLowerCase());
+        return coin ? coin.id : null;
+    } catch (error) {
+        console.error('Error al obtener la lista de criptomonedas:', error);
+        return null;
+    }
 }
 
-// Esta función formatea el número de RUT
-function formatNumber(number) {
-  return number.toLocaleString('cl-ES');
-}
+client.on('message', async (message) => {
+    if (message.body === '!cripto') {
+        client.sendMessage(message.from, 'Ingresa el nombre de la criptomoneda pajaron qliao.');
+        return;
+    }
 
-// Esta función calcula el dígito verificador de un RUT
-function getMod(number) {
-  let total = 0;
-  let multiplier = 2;
+    if (message.body.startsWith('!cripto')) {
+        const coinName = message.body.slice(8).trim();
+        const coinId = await getCoinId(coinName);
+        if (!coinId) {
+            client.sendMessage(message.from, 'La criptomoneda especificada no se encontró aweonao.');
+            return;
+        }
 
-  while (number > 0) {
-      total += (number % 10) * multiplier;
-      number = Math.floor(number / 10);
-      multiplier = multiplier % 7 + 2;
+        try {
+            const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=clp`);
+            const data = response.data;
+            const price = parseFloat(data[coinId].clp).toLocaleString('es-CL');
+            client.sendMessage(message.from, `El precio de ${coinName} es: $${price} CLP`);
+        } catch (error) {
+            client.sendMessage(message.from, 'Ocurrió un error al obtener la información de la criptomoneda, Jodiste.');
+            console.error('Error al obtener información de la criptomoneda, nada que hacer papeto:', error);
+        }
+    }
+});
+
+/// Restriccion ///
+
+client.on('message', async (msg) => {
+  if (msg.body.startsWith('!restriccion')) {
+      const response = `
+Jueves:  0️⃣ y 1️⃣
+Viernes:  2️⃣ y 3️⃣
+Lunes:  4️⃣ y 5️⃣
+Martes:  6️⃣ y 7️⃣
+Miércoles:  8️⃣ y 9️⃣
+🚗🚙🛵
+      `;
+      await msg.reply(response);
   }
+});
 
-  const mod = 11 - (total % 11);
-  return mod === 11 ? '0' : mod === 10 ? 'K' : mod.toString();
+/// Horoscopo ///
+
+client.on('message', async (msg) => {
+  const command = msg.body.toLowerCase().trim();
+  
+  if (command.startsWith('!horoscopo')) {
+      const signo = command.split(' ')[1];
+      if (!signo) {
+          msg.reply('Por favor, proporciona un signo válido.');
+          return;
+      }
+
+      const signoLimpio = limpiarSigno(signo);
+
+      // Para el horóscopo occidental
+      if (/^(aries|tauro|geminis|cancer|leo|virgo|libra|escorpion|sagitario|capricornio|acuario|piscis)$/i.test(signoLimpio)) {
+          getHoroscopo('horoscopo.py', signoLimpio, msg.from);
+      } 
+      // Para el horóscopo chino
+      else if (/^(rata|buey|tigre|conejo|dragon|serpiente|caballo|cabra|mono|gallo|perro|cerdo)$/i.test(signoLimpio)) {
+          getHoroscopo('horoscopoc.py', signoLimpio, msg.from);
+      } else {
+          msg.reply('Por favor, proporciona un signo válido.');
+      }
+  }
+});
+
+// Función para limpiar el signo de tildes y otros caracteres especiales
+function limpiarSigno(signo) {
+  return signo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
+// Función para obtener y enviar el horóscopo
+function getHoroscopo(script, signo, chatId) {
+  exec(`python ${script} ${signo}`, { encoding: 'latin1' }, (error, stdout, stderr) => {
+      if (error) {
+          console.error(`Error al ejecutar el comando: ${error}`);
+          client.sendMessage(chatId, 'Ocurrió un error al obtener el horóscopo.');
+          return;
+      }
+      if (stderr) {
+          console.error(`stderr: ${stderr}`);
+          client.sendMessage(chatId, 'Ocurrió un error al obtener el horóscopo.');
+          return;
+      }
 
-// Conecta el cliente a WhatsApp
+      const horoscopo = stdout.trim();
+      if (horoscopo === 'Signo no encontrado.') {
+          client.sendMessage(chatId, horoscopo);
+      } else {
+          // Envía el texto del horóscopo
+          client.sendMessage(chatId, horoscopo);
+
+          // Envía la imagen correspondiente
+          const imagePath = findImage(signo);
+          if (imagePath) {
+              sendImage(chatId, imagePath);
+          } else {
+              console.error(`No se encontró una imagen para el signo ${signo}`);
+          }
+      }
+  });
+}
+
+// Función para encontrar la imagen correspondiente
+function findImage(signo) {
+  const signoImagesPath = path.join(__dirname, 'signos');
+  const files = fs.readdirSync(signoImagesPath);
+
+  for (const file of files) {
+      const filenameWithoutExt = limpiarSigno(file.split('.')[0]);
+      if (filenameWithoutExt === signo) {
+          return path.join(signoImagesPath, file);
+      }
+  }
+  
+  console.error(`No se encontró una imagen para el signo ${signo}`);
+  return null;
+}
+
+// Función para enviar una imagen
+async function sendImage(chatId, imagePath) {
+  if (fs.existsSync(imagePath)) {
+      const media = MessageMedia.fromFilePath(imagePath);
+      await client.sendMessage(chatId, media, { caption: 'Imagen del signo zodiacal.' });
+  } else {
+      console.error(`La imagen no existe en la ruta: ${imagePath}`);
+  }
+}
+
+/// Transbank ///
+
+// Escucha los mensajes recibidos
+client.on('message', async (msg) => {
+    if (msg.body === '!trstatus') {
+        console.log("Mensaje recibido: !trstatus");
+        obtenerEstadoTransbank(msg.from);
+    }
+});
+
+// Función para ejecutar el script transbank.py
+function obtenerEstadoTransbank(chatId) {
+    exec('python transbank.py', (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error al ejecutar el script: ${error}`);
+            client.sendMessage(chatId, 'Ocurrió un error al obtener el estado de Transbank.');
+            return;
+        }
+        client.sendMessage(chatId, stdout);
+    });
+}
+
+/// Ticket ///
+
+client.on('message', async message => {
+  if (message.body.startsWith('!ticket')) {
+      const args = message.body.split(' ');
+
+      if (args.length === 1) {
+          // Show tickets
+          const ticketsData = fs.readFileSync(TICKET_FILE_PATH, 'utf8');
+          let tickets = [];
+          if (ticketsData.trim() !== '') {
+              tickets = JSON.parse(ticketsData);
+          }
+          if (tickets.length === 0) {
+              await message.reply('No hay tickets guardados.');
+          } else {
+              let response = 'Tickets guardados:\n';
+              tickets.forEach((ticket, index) => {
+                  const ticketNumber = index + 1;
+                  response += `${pad(ticketNumber, 4)}. ${ticket.text}${ticket.resolved ? ' ✅' : ' ⏳'}\n`;
+              });
+              await message.reply(response);
+          }
+      } else if (args[0] === '!ticketr' && args.length === 2) {
+          // Resolve ticket
+          const ticketNumber = parseInt(args[1]);
+          const ticketsData = fs.readFileSync(TICKET_FILE_PATH, 'utf8');
+          let tickets = [];
+          if (ticketsData.trim() !== '') {
+              tickets = JSON.parse(ticketsData);
+          }
+          if (ticketNumber >= 1 && ticketNumber <= tickets.length) {
+              tickets[ticketNumber - 1].resolved = true;
+              fs.writeFileSync(TICKET_FILE_PATH, JSON.stringify(tickets));
+              await message.reply(`El ticket ${ticketNumber} ha sido marcado como resuelto.`);
+          } else {
+              await message.reply('Número de ticket inválido.');
+          }
+      } else if (args[0] === '!tickete' && args.length === 2) {
+          // Eliminar ticket
+          const ticketNumber = parseInt(args[1]);
+          const ticketsData = fs.readFileSync(TICKET_FILE_PATH, 'utf8');
+          let tickets = [];
+          if (ticketsData.trim() !== '') {
+              tickets = JSON.parse(ticketsData);
+          }
+          if (ticketNumber >= 1 && ticketNumber <= tickets.length) {
+              tickets.splice(ticketNumber - 1, 1);
+              fs.writeFileSync(TICKET_FILE_PATH, JSON.stringify(tickets));
+              await message.reply(`El ticket ${ticketNumber} ha sido eliminado.`);
+          } else {
+              await message.reply('Número de ticket inválido.');
+          }
+      } else {
+          // Save ticket
+          args.shift(); // Remove !ticket
+          const motivo = args.join(' ');
+          const ticketsData = fs.readFileSync(TICKET_FILE_PATH, 'utf8');
+          let tickets = [];
+          if (ticketsData.trim() !== '') {
+              tickets = JSON.parse(ticketsData);
+          }
+          tickets.push({ text: motivo, resolved: false });
+          fs.writeFileSync(TICKET_FILE_PATH, JSON.stringify(tickets));
+          await message.reply('Ticket guardado exitosamente ⏳.');
+      }
+  }
+});
+
+/// Gif con audios ///
+
+client.on('message', async (msg) => {
+  if (msg.body.startsWith('!pedro')) {
+      const file = 'C:\\bots\\AirFryers-bot\\mp3\\gif\\pedro.webp'; // Ruta del sticker
+      const chat = await msg.getChat();
+
+      try {
+          if (fs.existsSync(file)) {
+              const sticker = MessageMedia.fromFilePath(file);
+              chat.sendMessage(sticker, { sendMediaAsSticker: true });
+          } else {
+              console.log('El archivo no existe.');
+          }
+      } catch (err) {
+          console.log('Error al enviar el archivo:', err);
+      }
+  }
+});
+
+/// Busqueda Youtube ///
+
+client.on('message', async message => {
+  if (message.body.startsWith('!yt ')) {
+      const query = message.body.slice(4); // Obtener el texto de búsqueda después de "!yt "
+      buscarVideos(query, message);
+  }
+});
+
+function buscarVideos(query, message) {
+  const python = spawn('python', ['yt.py', query]);
+
+  let respuesta = "Resultados de búsqueda:\n";
+
+  python.stdout.on('data', function(data) {
+      respuesta += data.toString();
+  });
+
+  python.stderr.on('data', function(data) {
+      console.error(data.toString());
+      // Enviar mensaje de error al usuario
+      message.reply('Ocurrió un error al buscar videos.');
+  });
+
+  python.on('close', function(code) {
+      if (respuesta === "Resultados de búsqueda:\n") {
+          // Si no hay resultados
+          message.reply('No se encontraron resultados para la búsqueda.');
+      } else {
+          // Enviar la respuesta al usuario
+          message.reply(respuesta);
+      }
+  });
+}
+
+/// Patente y Tag ///
+
+// Lista de espera para los comandos
+let commandQueue = {};
+
+// Variable para controlar el tiempo de espera
+let lastCommandTime = {};
+
+// Función para ejecutar los scripts Python y enviar la información al usuario
+function obtenerInformacion(chatId, command, csvFile, message) {
+    const currentTime = new Date().getTime();
+
+    // Verificar si han pasado 30 segundos desde el último comando
+    if (lastCommandTime[message.author.id] && currentTime - lastCommandTime[message.author.id] < 30000) {
+        message.channel.send("⏰ Espera al menos 30 segundos antes de usar este comando de nuevo!");
+        return;
+    }
+
+    // Verificar si el comando está en la lista de espera
+    if (commandQueue[message.author.id]) {
+        message.channel.send("⏳ Tu comando está en espera. Por favor, espera tu turno.");
+        return;
+    }
+
+    // Agregar el usuario a la lista de espera
+    commandQueue[chatId] = true;
+
+    // Enviar mensaje de espera
+    message.channel.send("⏳⏳ Espera un poco, estoy buscando la información...");
+
+    exec(command, (error, stdout, stderr) => {
+        // Eliminar al usuario de la lista de espera después de 30 segundos
+        setTimeout(() => {
+            delete commandQueue[chatId];
+        }, 30000);
+
+        if (error) {
+            console.error(`Error al ejecutar el script: ${error}`);
+            message.reply('Ocurrió un error al obtener la información.');
+            return;
+        }
+
+        // Esperar un momento para que se genere el archivo .csv
+        setTimeout(() => {
+            // Leer el archivo .csv generado por el script
+            fs.readFile(csvFile, 'utf8', (err, data) => {
+                if (err) {
+                    console.error(`Error al leer el archivo CSV: ${err}`);
+                    message.reply('Ocurrió un error al obtener la información.');
+                    return;
+                }
+                // Enviar la información del archivo .csv al remitente
+                message.reply('```' + data + '```');
+            });
+        }, 5000); // Esperar 5 segundos antes de leer el archivo .csv
+    });
+
+    // Actualizar el tiempo del último comando
+    lastCommandTime[chatId] = currentTime;
+}
+
+// Escucha los mensajes recibidos
+client.on('message', async (msg) => {
+    if (msg.body.startsWith('!nn')) {
+        console.log("Mensaje recibido: !nn");
+        const patente = msg.body.slice(9).trim();
+        obtenerInformacion(msg.from, `python patente.py ${patente}`, 'patente.csv', msg);
+    } else if (msg.body.startsWith('!k')) {
+        console.log("Mensaje recibido: !k");
+        const rut = msg.body.slice(5).trim();
+        obtenerInformacion(msg.from, `python tag.py ${rut}`, 'tag.csv', msg);
+    }
+});
+
+// robo auto//
+
+client.on('message', async msg => {
+  if (msg.body.startsWith('!robo')) {
+      const args = msg.body.split(' ');
+      if (args.length === 2) {
+          const ppu = args[1];
+          try {
+              const response = await axios.post('http://consultapatente.c1.is/api2.php', `ppu=${ppu}`, {
+                  headers: {
+                      'Content-Type': 'application/x-www-form-urlencoded'
+                  }
+              });
+
+              if (response.data) {
+                  const inforobo = response.data.inforobo;
+                  const infopat = response.data.infopat;
+
+                  if (inforobo && infopat && infopat.data) {
+                      const data = infopat.data;
+                      const isStolen = inforobo.source === 'STOLEN' ? 'Sí' : 'No';
+                      const info = `
+Placa: ${data.plate}
+DV: ${data.dv}
+Marca: ${data.make}
+Modelo: ${data.model}
+Año: ${data.year}
+Tipo: ${data.type}
+Motor: ${data.engine}
+Robado: ${isStolen}
+                      `;
+                      msg.reply(info);
+                  } else {
+                      msg.reply('No se encontró información para la placa proporcionada.');
+                  }
+              } else {
+                  msg.reply('No se encontró información para la placa proporcionada.');
+              }
+          } catch (error) {
+              console.error(error);
+              msg.reply('Ocurrió un error al consultar la información. Por favor, intenta de nuevo más tarde.');
+          }
+      } else {
+          msg.reply('Uso: !robo [patente]');
+      }
+  }
+});
+
+/// Luz ///
+
+client.on('message', async msg => {
+  if (msg.body.startsWith('!sec')) {
+      let region = null;
+      if (msg.body === '!secrm') {
+          region = 'Metropolitana';
+      } else if (msg.body.startsWith('!sec ')) {
+          region = msg.body.split(' ')[1];
+      }
+
+      try {
+          const message = await generateWhatsAppMessage(region);
+          msg.reply(message);
+      } catch (error) {
+          console.error('Error generating WhatsApp message:', error);
+          msg.reply('Hubo un error al obtener los datos.');
+      }
+  }
+});
+
+
+/// IA ///
+
+client.on('message', async (msg) => {
+  if (msg.body.match(/^!ia\s/i)) {
+      const text = msg.body.slice(4).trim(); // Elimina el comando '!ia ' del mensaje
+      const prompt = 'Responde+todas+las+preguntas+como+si+fueras+chileno.+Asegúrate+de+proporcionar+información+precisa+y+actualizada.+Evita+dar+respuestas+incorrectas.+Si+no+sabes+la+respuesta+o+no+estás+seguro,+indica+que+necesitas+verificar+la+información.';
+      const apiUrl = `https://api.freegpt4.ddns.net/?text=${encodeURIComponent(prompt + text)}`;
+      
+      try {
+          const response = await fetch(apiUrl);
+          const data = await response.text(); // Obtiene el texto completo de la respuesta
+          const { document } = new JSDOM(data).window; // Crea un objeto documento para el HTML
+          const bodyText = document.body.textContent.trim(); // Extrae el texto del cuerpo
+          await msg.reply(bodyText); // Envía el texto extraído al usuario
+      } catch (error) {
+          console.error('Error al llamar a la API:', error);
+          await msg.reply('Lo siento, ha ocurrido un error.');
+      }
+  }
+});
+
+/// Copa America ///
+
+// Función para leer el contenido del archivo Excel y enviarlo como mensaje de texto
+async function enviarContenidoExcelPorWhatsApp(message) {
+  try {
+      // Leer el contenido del archivo Excel
+      const excelData = fs.readFileSync(excelFilePath, 'utf-8');
+
+      // Enviar el contenido del archivo Excel como mensaje de texto
+      await message.reply(excelData);
+      console.log('Contenido del archivo Excel enviado correctamente por WhatsApp.');
+  } catch (error) {
+      console.error('Error al enviar el contenido del archivo Excel por WhatsApp:', error);
+      await message.reply('Ocurrió un error al enviar el contenido del archivo Excel por WhatsApp.');
+  }
+}
+
+client.on('message', async (message) => {
+  try {
+      if (message.body === '!copa') { // Responder al comando si lo envía el usuario
+          await enviarContenidoExcelPorWhatsApp(message);
+      }
+  } catch (error) {
+      console.error('Error al ejecutar el comando !copa:', error);
+      await message.reply('Ocurrió un error al ejecutar el comando !copa.');
+  }
+});
+
 client.initialize();
+
+// Función para añadir ceros a la izquierda hasta alcanzar la longitud especificada
+function pad(number, length) {
+  let str = '' + number;
+  while (str.length < length) {
+      str = '0' + str;
+  }
+  return str;
+}
