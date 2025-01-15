@@ -6,56 +6,49 @@ from bs4 import BeautifulSoup
 # Establecer la codificación de la salida estándar
 sys.stdout.reconfigure(encoding='utf-8')
 
+# Constantes
+URL_TRANSBANK = 'https://status.transbankdevelopers.cl/'
+EMOJIS = {
+    "Operational": "✅",  # tick verde
+    "No disponible": "❌",  # x roja
+    "Degradado": "⚠️"  # signo de exclamación amarillo
+}
+
 def obtener_estado_transbank():
+    """Obtiene el estado de los servicios de Transbank desde la web."""
     try:
-        # Realizar la solicitud HTTP para obtener el estado de Transbank
-        response = requests.get('https://status.transbankdevelopers.cl/')
-        response.raise_for_status()
+        response = requests.get(URL_TRANSBANK)
+        response.raise_for_status()  # Lanza una excepción para códigos de estado 4xx/5xx
 
-        # Parsear el HTML
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Encontrar todos los elementos que contienen el estado de los servicios
         servicios = soup.find_all('div', class_='component-inner-container')
 
-        # Crear un diccionario para almacenar el estado de cada servicio
-        servicio_estado = {}
-
-        # Iterar sobre cada servicio y extraer su nombre y estado
-        for servicio in servicios:
-            nombre = servicio.find('span', class_='name').text.strip()
-            estado = servicio.find('span', class_='component-status').text.strip()
-            servicio_estado[nombre] = estado
-
-        return servicio_estado
+        # Extraer nombre y estado de cada servicio en un diccionario
+        return {
+            servicio.find('span', class_='name').text.strip(): 
+            servicio.find('span', class_='component-status').text.strip()
+            for servicio in servicios
+        }
     except requests.RequestException as e:
-        # Manejar errores de solicitud HTTP
-        print('Error al realizar la solicitud HTTP:', str(e))
-        return None
+        print(f'Error al realizar la solicitud HTTP: {e}')
     except Exception as e:
-        # Manejar otros errores
-        print('Error inesperado:', str(e))
-        return None
+        print(f'Error inesperado: {e}')
+    return None
 
 def mostrar_estado(servicio, estado):
-    # Asignar emojis a los diferentes estados
-    emojis = {
-        "Operational": "✅",  # tick verde
-        "No disponible": "❌",  # x roja
-        "Degradado": "⚠️"  # signo de exclamación amarillo
-    }
-    
-    # Obtener el emoji correspondiente al estado
-    emoji = emojis.get(estado, "❓")  # signo de interrogación en caso de estado desconocido
-
-    # Devolver el estado del servicio con su emoji correspondiente
+    """Devuelve el estado del servicio con el emoji correspondiente."""
+    emoji = EMOJIS.get(estado, "❓")  # Signo de interrogación en caso de estado desconocido
     return f"{emoji} {servicio}: {estado}"
 
-# Llamada a la función para obtener el estado de Transbank Developers
-estado = obtener_estado_transbank()
-if estado:
-    print("Estado de Transbank Developers:")
-    for servicio, estado in estado.items():
-        print(mostrar_estado(servicio, estado))
-else:
-    print("No se pudo obtener el estado de Transbank Developers en este momento.")
+def main():
+    """Función principal para obtener y mostrar el estado de los servicios."""
+    estado = obtener_estado_transbank()
+    if estado:
+        print("Estado de Transbank Developers:")
+        for servicio, estado in estado.items():
+            print(mostrar_estado(servicio, estado))
+    else:
+        print("No se pudo obtener el estado de Transbank Developers en este momento.")
+
+if __name__ == "__main__":
+    main()

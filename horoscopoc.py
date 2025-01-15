@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+import sys
 import requests
 from bs4 import BeautifulSoup
-import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 def obtener_horoscopo_chino(signo_buscar):
     url = "https://www.elhoroscopochino.com.ar/horoscopo-chino-de-hoy"

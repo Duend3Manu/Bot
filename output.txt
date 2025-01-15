@@ -1,0 +1,86 @@
+Comuna ingresada: Conchali
+No se pudieron obtener los datos de bencina para Conchali
+
+🗺️ Dirección en mapa: https://www.google.com/maps/search/?api=1&query=-33.380654512554656,-70.65959930419922
+⛽ Precios de los combustibles:
+Gasolina 93: $1,258 x /L
+Gasolina 97: $1,368 x /L
+Petroleo Diesel: $964 x /L
+Kerosene: $977 x /L
+Gasolina 95: $1,322 x /L
+--------------------------------------------------
+📍 Nombre: Independencia 3060
+🗺️ Dirección en mapa: https://www.google.com/maps/search/?api=1&query=-33.3988728466826,-70.66883146762848
+⛽ Precios de los combustibles:
+Gasolina 93: $1,271 x /L
+Gasolina 97: $1,358 x /L
+Petroleo Diesel: $959 x /L
+Kerosene: $968 x /L
+Gasolina 95: $1,311 x /L
+--------------------------------------------------
+📍 Nombre: Independencia 6117
+🗺️ Dirección en mapa: https://www.google.com/maps/search/?api=1&query=-33.3668394,-70.68913459999999
+⛽ Precios de los combustibles:
+Gasolina 93: $1,275 x /L
+Petroleo Diesel: $978 x /L
+Kerosene: $998 x /L
+GLP Vehicular: $640 x /m3
+Gasolina 95: $1,318 x /L
+--------------------------------------------------
+📍 Nombre: Americo Vespucio 1880
+🗺️ Dirección en mapa: https://www.google.com/maps/search/?api=1&query=-33.36755107652696,-70.68179726600647
+⛽ Precios de los combustibles:
+Gasolina 93: $1,299 x /L
+Gasolina 97: $1,405 x /L
+Petroleo Diesel: $1,064 x /L
+Gasolina 95: $1,355 x /L
+--------------------------------------------------
+📍 Nombre: Avenida Independencia 4905
+🗺️ Dirección en mapa: https://www.google.com/maps/search/?api=1&query=-33.383687060684636,-70.68083703517914
+⛽ Precios de los combustibles:
+Gasolina 93: $1,269 x /L
+Gasolina 95: $1,309 x /L
+Gasolina 97: $1,356 x /L
+Kerosene: $972 x /L
+Petroleo Diesel: $957 x /L
+--------------------------------------------------
+📍 Nombre: Monterrey 2987
+🗺️ Dirección en mapa: https://www.google.com/maps/search/?api=1&query=-33.4005813894707,-70.68270921707153
+⛽ Precios de los combustibles:
+Gasolina 93: $1,288 x /L
+Gasolina 97: $1,375 x /L
+Petroleo Diesel: $949 x /L
+GNC: $919 x /m3
+Gasolina 95: $1,326 x /L
+Gasolina 93: $1,280 x /L
+Gasolina 95: $1,318 x /L
+Gasolina 97: $1,367 x /L
+Petroleo Diesel: $941 x /L
+--------------------------------------------------
+📍 Nombre: Avenida Zapadores 1200
+🗺️ Dirección en mapa: https://www.google.com/maps/search/?api=1&query=-33.38705096005634,-70.65749645233154
+⛽ Precios de los combustibles:
+Gasolina 93: $1,258 x /L
+Gasolina 97: $1,368 x /L
+Petroleo Diesel: $962 x /L
+Kerosene: $1,095 x /L
+Gasolina 95: $1,322 x /L
+Gasolina 93: $1,250 x /L
+Gasolina 95: $1,314 x /L
+Gasolina 97: $1,360 x /L
+Petroleo Diesel: $954 x /L
+--------------------------------------------------
+📍 Nombre: Independencia 4071
+🗺️ Dirección en mapa: https://www.google.com/maps/search/?api=1&query=-33.39046561701275,-70.6750709276863
+⛽ Precios de los combustibles:
+Gasolina 93: $1,277 x /L
+Gasolina 97: $1,364 x /L
+Petroleo Diesel: $965 x /L
+Kerosene: $1,080 x /L
+Gasolina 95: $1,317 x /L
+--------------------------------------------------
+📍 Nombre: Independencia 6117
+🗺️ Dirección en mapa: https://www.google.com/maps/search/?api=1&query=-33.367256,-70.689095
+⛽ Precios de los combustibles:
+GLP Vehicular: $608 x /m3
+--------------------------------------------------

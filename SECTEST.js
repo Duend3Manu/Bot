@@ -13,7 +13,7 @@ async function getServerTime() {
         const response = await axios.post('https://apps.sec.cl/INTONLINEv1/ClientesAfectados/GetHoraServer', {}, {
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'Accept': 'application/json, text/javascript, /; q=0.01',
                 'Accept-Language': 'es-419,es;q=0.9',
                 'Origin': 'https://apps.sec.cl',
                 'Referer': 'https://apps.sec.cl/INTONLINEv1/index.aspx',
@@ -22,20 +22,40 @@ async function getServerTime() {
             }
         });
         const serverTime = response.data[0].FECHA;
-        const [date, time] = serverTime.split(' ');
-        const [day, month, year] = date.split('-');
-        const [hour, minute, second] = time.split(':');
-        return {
-            anho: parseInt(year),
-            mes: parseInt(month),
-            dia: parseInt(day),
-            hora: parseInt(hour)
-        };
+        return parseDate(serverTime);
     } catch (error) {
         console.error('Error fetching server time:', error);
         return null;
     }
 }
+
+function parseDate(serverTime) {
+    let date, time, day, month, year, hour, minute, second;
+
+    // Intenta el formato con barras primero (DD-MM-YYYY)
+    if (serverTime.includes('-')) {
+        [date, time] = serverTime.split(' ');
+        [day, month, year] = date.split('-');
+        [hour, minute, second] = time.split(':');
+    } 
+    // Intenta el formato con diagonales (DD/MM/YYYY)
+    else if (serverTime.includes('/')) {
+        [date, time] = serverTime.split(' ');
+        [day, month, year] = date.split('/');
+        [hour, minute, second] = time.split(':');
+    }
+
+    // Devuelve un objeto con la fecha en formato numérico
+    return {
+        anho: parseInt(year),
+        mes: parseInt(month),
+        dia: parseInt(day),
+        hora: parseInt(hour),
+        minuto: parseInt(minute),
+        segundo: parseInt(second)
+    };
+}
+
 
 // Función para obtener los datos de clientes afectados basado en la fecha y hora del servidor
 async function fetchData(timeData) {

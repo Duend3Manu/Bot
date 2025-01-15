@@ -3,264 +3,217 @@
 // Importaciones de utilidades y herramientas
 const fs = require('fs');
 const path = require('path');
-const pathToFfmpeg = 'C:\\FFmpeg\\bin\\ffmpeg.exe';
-const sanitize = require('sanitize-filename'); // Biblioteca para limpiar nombres de archivo
-const streamBuffers = require('stream-buffers');
-const { htmlToText } = require('html-to-text');
-const { Builder, By, until } = require('selenium-webdriver'); // Importación única de selenium-webdriver
-const edge = require('selenium-webdriver/edge');
-const yargs = require('yargs');
-const { spawn } = require('child_process');
-const FormData = require('form-data');
-const puppeteer = require('puppeteer');
-const chrome = require('selenium-webdriver/chrome');
-const { exec } = require('child_process');
-const express = require('express');
-const app = express();
-const { generateWhatsAppMessage } = require('./SECTEST');  // Asegúrate de que la ruta es correcta
-
-// Importaciones de WhatsApp y qrcode
-const { Client, MessageMedia, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
-
-// Importaciones de bibliotecas de terceros
 const axios = require('axios');
 const cheerio = require('cheerio');
+const express = require('express');
+const moment = require('moment-timezone');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const { spawn, exec } = require('child_process');
+const { Builder, By, until } = require('selenium-webdriver');
+const edge = require('selenium-webdriver/edge');
+const puppeteer = require('puppeteer');
+const { PythonShell } = require('python-shell');
+const { JSDOM } = require('jsdom');
+const sanitize = require('sanitize-filename');
+const streamBuffers = require('stream-buffers');
 const ffmpeg = require('fluent-ffmpeg');
 const gify = require('gify');
 const GoogleIt = require('google-it');
 const Jimp = require('jimp');
-const moment = require('moment-timezone');
 const xvideos = require('@rodrigogs/xvideos');
-const InstagramScraper = require('instagram-scraper');
-const twitterVideoDownloader = require('twitter-video-downloader');
 const unorm = require('unorm');
 const iconv = require('iconv-lite');
-const { PythonShell } = require('python-shell');
-const { JSDOM } = require('jsdom');
+const XLSX = require('xlsx');
+const FormData = require('form-data');
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('messages.db');
 
 // Importaciones de módulos personalizados
+const { generateWhatsAppMessage } = require('./SECTEST');
 const clasi = require('./Archivos/clasi.js');
 const metro = require('./Archivos/metro.js');
 const proxpar = require('./Archivos/proxpar.js');
 const tabla = require('./Archivos/tabla.js');
 const tclasi = require('./Archivos/tclasi.js');
 const valores = require('./Archivos/valores.js');
-const TICKET_FILE_PATH = './ticket.json';
-const excelFilePath = 'resultados_copa_america.xlsx';
 
-// Otras importaciones //
-const opts = {};
-// Objeto para almacenar los tickets
+// Constantes de configuración
+const TICKET_FILE_PATH = './ticket.json';
+const pythonPath = '"C:\\Program Files\\Python311\\python.exe"';
+const pathToFfmpeg = 'C:\\FFmpeg\\bin\\ffmpeg.exe';
+
+// Inicializar el servidor Express
+const app = express();
+
+// Otras configuraciones
 let tickets = {};
+
 // Crear archivo ticket.json si no existe
 if (!fs.existsSync(TICKET_FILE_PATH)) {
-  fs.writeFileSync(TICKET_FILE_PATH, '[]');
+    fs.writeFileSync(TICKET_FILE_PATH, '[]');
 }
+
 // Establecer idioma en español
 moment.locale('es');
 
 // Configuración del cliente de WhatsApp
-const webVersion = '2.2412.54';
+const webVersion = '2.3000.1016827651';
 const client = new Client({
-  authStrategy: new LocalAuth(),
-  puppeteer: { 
-    executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Ruta a Chrome en Windows
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--disable-gpu',
-    ]
-  },
-  webVersionCache: {
-    type: 'remote',
-    remotePath: `https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/${webVersion}.html`,
-  },
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu',
+            '--window-position=-2400,-2400', // Añadido aquí
+        ]
+    },
+    webVersionCache: {
+        type: 'remote',
+        remotePath: `https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/${webVersion}.html`,
+    },
 });
 
 console.log("El bot se está conectando, por favor espere...");
-
 client.setMaxListeners(Infinity);
 
-// URL de la API de feriados
+// URLs de las APIs
 const apiUrlFeriados = 'https://apis.digital.gob.cl/fl/feriados';
-
-// URL de la API de Mindicador
 const apiUrlMindicador = 'https://mindicador.cl/api';
-
-// URL de la API de farmacias de turno
 const apiUrlFarmacias = 'https://midas.minsal.cl/farmacia_v2/WS/getLocalesTurnos.php';
 
-// Evento que se activa cuando se necesita escanear el código QR para iniciar sesión
+// Evento que se activa cuando se necesita escanear el código QR
 client.on('qr', (qrCode) => {
-  qrcode.generate(qrCode, { small: true });
+    qrcode.generate(qrCode, { small: true });
 });
 
-// Evento que se activa cuando el cliente está listo para ser utilizado
+// Evento que se activa cuando el cliente está listo
 client.on('ready', () => {
-  console.log('AirFryers bot está listo');
+    console.log('AirFryers bot está listo');
 });
-
 
 // Evento que se activa cuando se recibe un mensaje
 client.on('message', async (msg) => {
-  console.log('Mensaje recibido:', msg.body);
+    console.log('Mensaje recibido:', msg.body);
 
-  const lowerCaseBody = msg.body.toLowerCase();
+    const lowerCaseBody = msg.body.toLowerCase();
+    const senderInfo = await msg.getContact();
 
-  // Obtener información del remitente
-  const senderInfo = await msg.getContact();
-
-  // Resto del código para otros comandos y funciones
-  
-  if (lowerCaseBody === '!menu' || lowerCaseBody === '!comandos') {
-    sendMenu(msg.from);
-  }
-   else if (lowerCaseBody === '!hola') {
-    const responses = JSON.parse(fs.readFileSync('saludos.json', 'utf8'));
-    const randomResponse = getRandomResponse(responses);
-    client.sendMessage(msg.from, `👋🏻 ${randomResponse}`);
-  } else if (lowerCaseBody === '!d') {
-    try {
-      const response = await axios.get(apiUrlMindicador);
-      const { uf, dolar, euro, utm } = response.data;
-
-      const replyMessage = `💰 Valores actuales:
-      
-      ╔══════AirFryers Bot═══════╗
-      ║  - Dólar: $${dolar.valor}║
-      ║                          ║
-      ║  - Euro: $${euro.valor}  ║
-      ║                          ║
-      ║  - UF: $${uf.valor}      ║
-      ║                          ║
-      ║  - UTM: $${utm.valor}    ║
-      ╚═════AirFryers Bot════════╝`;
-
-      client.sendMessage(msg.from, replyMessage);
-    } catch (error) {
-      console.log('Error al obtener los valores:', error.message);
-      client.sendMessage(msg.from, 'Ocurrió un error al obtener los valores.');
+    // Comandos
+    if (lowerCaseBody === '!menu' || lowerCaseBody === '!comandos') {
+        sendMenu(msg.from);
+    } else if (lowerCaseBody === '!feriados') {
+        handleFeriados(msg);
+    } else if (lowerCaseBody.startsWith('!far')) {
+        handleFarmacias(msg, lowerCaseBody);
+    } else if (lowerCaseBody === '!tabla') {
+        tabla.llamarTablaPy(client, msg.from);
+        client.sendMessage(msg.from, '⚽ Mostrando la tabla de posiciones.');
+    } else if (lowerCaseBody === '!metro') {
+        metro.llamarMetroPy(client, msg.from);
+        client.sendMessage(msg.from, '🚇 Mostrando información del metro.');
+    } else if (lowerCaseBody === '!prox') {
+        proxpar.llamarProxparPy(client, msg.from);
+        client.sendMessage(msg.from, '⚽ Mostrando la fecha de partido.');
+    } else if (lowerCaseBody === '!clasi') {
+        clasi.llamarClasiPy(client, msg.from);
+        client.sendMessage(msg.from, '⚽ Mostrando la clasificación.');
+    } else if (lowerCaseBody === '!tclasi') {
+        tclasi.llamarTclasiPy(client, msg.from);
+        client.sendMessage(msg.from, '⚽ Mostrando la tabla de clasificación.');
+    } else if (lowerCaseBody === '!valores') {
+        valores.llamarValoresPy(client, msg.from);
+        client.sendMessage(msg.from, 'Mostrando los Valores.');
     }
-  }
-    /// Feriados//
-    else if (lowerCaseBody === '!feriados') {
-      try {
-          const today = moment().format('YYYY-MM-DD');
-          const response = await axios.get(apiUrlFeriados);
-          const feriados = response.data;
-  
-          let replyMessage = '🥳 Próximos feriados:\n\n';
-          let nextFeriados = 0;
-          feriados.forEach((feriado) => {
-              if (moment(feriado.fecha).isAfter(today) && nextFeriados < 5) {
-                  const formattedDate = moment(feriado.fecha).format('dddd - DD/MM/YY');
-                  replyMessage += `- ${formattedDate}: ${feriado.nombre}\n`;
-                  nextFeriados++;
-              }
-          });
-  
-          // Si no hay más feriados en la lista, se informa al usuario.
-          if (nextFeriados === 0) {
-              replyMessage = 'No se encontraron próximos feriados.';
-          }
-  
-          client.sendMessage(msg.from, replyMessage);
-      } catch (error) {
-          console.log('Error al obtener los feriados:', error.message);
-          client.sendMessage(msg.from, 'Ocurrió un error al obtener los feriados.');
-      }
-  
-    /// Farmacias//
+});
 
-} else if (lowerCaseBody.startsWith('!far')) {
-  const city = lowerCaseBody.substring(5)?.trim();
-  if (city) {
+// Funciones para manejar comandos
+async function handleFeriados(msg) {
     try {
+        const today = moment().format('YYYY-MM-DD');
+        const response = await axios.get(apiUrlFeriados);
+        const feriados = response.data;
 
-      const waitMessage = 'Un momento por favor, solicitando la información ⏳';
-      const waitMessageObj = await client.sendMessage(msg.from, waitMessage);
+        let replyMessage = '🥳 Próximos feriados:\n\n';
+        let nextFeriados = 0;
 
-      const response = await axios.get(apiUrlFarmacias);
-      const farmacias = response.data;
-
-      let filteredFarmacias = farmacias.filter((farmacia) =>
-        farmacia.comuna_nombre.toLowerCase().includes(city)
-      );
-
-      if (filteredFarmacias.length > 0) {
-        let replyMessage = `🏥 Farmacias de turno en ${city}:\n\n`;
-        const currentDateTime = moment();
-
-        filteredFarmacias.forEach((farmacia) => {
-          const {
-            local_nombre,
-            local_direccion,
-            funcionamiento_hora_apertura,
-            funcionamiento_hora_cierre,
-            local_telefono,
-            local_lat,
-            local_lng
-          } = farmacia;
-
-          // Obtener la fecha y hora de apertura y cierre
-          const apertura = moment(`${funcionamiento_hora_apertura} ${currentDateTime.format('YYYY-MM-DD')}`, 'HH:mm YYYY-MM-DD');
-          const cierre = moment(`${funcionamiento_hora_cierre} ${currentDateTime.format('YYYY-MM-DD')}`, 'HH:mm YYYY-MM-DD');
-
-          // Formatear el horario
-          const horarioApertura = apertura.format('HH:mm');
-          const horarioCierre = cierre.format('HH:mm');
-
-          // Verificar si la farmacia está abierta en el momento actual
-          const isOpen = currentDateTime.isBetween(apertura, cierre);
-
-          const estado = isOpen ? 'Abierta' : 'Cerrada';
-
-          const mapLink = `https://www.google.com/maps?q=${local_lat},${local_lng}`;
-          replyMessage += `Farmacia: ${local_nombre}\nDirección: ${local_direccion}\nHora de apertura: ${horarioApertura}\nHora de cierre: ${horarioCierre}\nEstado: ${estado}\nTeléfono: ${local_telefono}\n${mapLink}\n\n`;
+        feriados.forEach((feriado) => {
+            if (moment(feriado.fecha).isAfter(today) && nextFeriados < 5) {
+                const formattedDate = moment(feriado.fecha).format('dddd - DD/MM/YY');
+                replyMessage += `- ${formattedDate}: ${feriado.nombre}\n`;
+                nextFeriados++;
+            }
         });
 
-        client.sendMessage(msg.from, replyMessage);
-      } else {
-        client.sendMessage(msg.from, `No se encontraron farmacias de turno en ${city}.`);
-      }
-    } catch (error) {
-      console.log('Error al obtener las farmacias:', error.message);
-      client.sendMessage(msg.from, 'Ocurrió un error al obtener las farmacias.');
-    }
-  } else {
-    client.sendMessage(msg.from, 'Debes especificar una ciudad. Por ejemplo: `!far Santiago`');
-  }
-}
-  
-  /// Funciones ///
+        if (nextFeriados === 0) {
+            replyMessage = 'No se encontraron próximos feriados.';
+        }
 
-  else if (lowerCaseBody === '!tabla') {
-    tabla.llamarTablaPy(client, msg.from);
-    client.sendMessage(msg.from, '⚽ Mostrando la tabla de posiciones.');
-  } else if (lowerCaseBody === '!metro') {
-    metro.llamarMetroPy(client, msg.from);
-    client.sendMessage(msg.from, '🚇 Mostrando información del metro.');
-  } else if (lowerCaseBody === '!prox') {
-    proxpar.llamarProxparPy(client, msg.from);
-    client.sendMessage(msg.from, '⚽ Mostrando la fecha de partido.');
-  } else if (lowerCaseBody === '!clasi') {
-    clasi.llamarClasiPy(client, msg.from);
-    client.sendMessage(msg.from, '⚽ Mostrando la clasificación.');
-  } else if (lowerCaseBody === '!tclasi') {
-    tclasi.llamarTclasiPy(client, msg.from);
-    client.sendMessage(msg.from, '⚽ Mostrando la tabla de clasificación.');
-  } else if (lowerCaseBody === '!valores') {
-    valores.llamarValoresPy(client, msg.from);
-    client.sendMessage(msg.from, 'Mostrando los Valores.');
-  }
-  
-});
+        client.sendMessage(msg.from, replyMessage);
+    } catch (error) {
+        console.error('Error al obtener los feriados:', error.message);
+        client.sendMessage(msg.from, 'Ocurrió un error al obtener los feriados.');
+    }
+}
+
+async function handleFarmacias(msg, lowerCaseBody) {
+    const city = lowerCaseBody.substring(5)?.trim();
+    if (!city) {
+        return client.sendMessage(msg.from, 'Debes especificar una ciudad. Por ejemplo: `!far Santiago`');
+    }
+
+    try {
+        const waitMessage = await client.sendMessage(msg.from, 'Un momento por favor, solicitando la información ⏳');
+        const response = await axios.get(apiUrlFarmacias);
+        const farmacias = response.data;
+
+        const filteredFarmacias = farmacias.filter((farmacia) =>
+            farmacia.comuna_nombre.toLowerCase().includes(city)
+        );
+
+        if (filteredFarmacias.length > 0) {
+            let replyMessage = `🏥 Farmacias de turno en ${city}:\n\n`;
+            const currentDateTime = moment();
+
+            filteredFarmacias.forEach((farmacia) => {
+                const {
+                    local_nombre,
+                    local_direccion,
+                    funcionamiento_hora_apertura,
+                    funcionamiento_hora_cierre,
+                    local_telefono,
+                    local_lat,
+                    local_lng,
+                } = farmacia;
+
+                const apertura = moment(`${funcionamiento_hora_apertura} ${currentDateTime.format('YYYY-MM-DD')}`, 'HH:mm YYYY-MM-DD');
+                const cierre = moment(`${funcionamiento_hora_cierre} ${currentDateTime.format('YYYY-MM-DD')}`, 'HH:mm YYYY-MM-DD');
+
+                const horarioApertura = apertura.format('HH:mm');
+                const horarioCierre = cierre.format('HH:mm');
+                const isOpen = currentDateTime.isBetween(apertura, cierre);
+                const estado = isOpen ? 'Abierta' : 'Cerrada';
+                const mapLink = `https://www.google.com/maps?q=${local_lat},${local_lng}`;
+
+                replyMessage += `Farmacia: ${local_nombre}\nDirección: ${local_direccion}\nHora de apertura: ${horarioApertura}\nHora de cierre: ${horarioCierre}\nEstado: ${estado}\nTeléfono: ${local_telefono}\n${mapLink}\n\n`;
+            });
+
+            client.sendMessage(msg.from, replyMessage);
+        } else {
+            client.sendMessage(msg.from, `No se encontraron farmacias de turno en ${city}.`);
+        }
+    } catch (error) {
+        console.error('Error al obtener las farmacias:', error.message);
+        client.sendMessage(msg.from, 'Ocurrió un error al obtener las farmacias.');
+    }
+}
 
 // Función para enviar el menú de comandos
 function sendMenu(chatId) {
@@ -272,7 +225,6 @@ function sendMenu(chatId) {
   
   💰 **Finanzas:**
   💵 !Valores 💵
-  💱 !cripto  💱 (debes agregar la moneda, ejemplo !cripto bnb)
   
   🥳 **Feriados:**
   🎉 !Feriados 🎉
@@ -292,17 +244,6 @@ function sendMenu(chatId) {
   🚇 **Metro de Santiago:**
   🚇 !Metro 🚇
   
-  🎰 **Juego:**
-  !ccp ✊🖐️✌️(Cachipún) (Advertencia con los premios +18 👀👀)
-  
-  🔍 **Búsquedas:**
-  !G 🔎
-  !Wiki 🔎
-  !yt 🔎  - (Realiza una búsqueda en Youtube)
-  
-  🤖 **Bot repite texto:**
-  !re 🤖
-  
   🤖 **Sticker Quietos o Con Movimiento:**
   !s 🤖 (Debes enviar la imagen, video o gif con el comando !s)
   
@@ -318,13 +259,11 @@ function sendMenu(chatId) {
   🌋 !sismos - Para saber los últimos 5 sismos en Chile.
   📞 !num o !tel - Para obtener información sobre un número de teléfono (formato !num o !tel 569********).
   🚌 !bus - Para obtener información sobre un paradero (!p nombre paradero)
-  🚗🏍️!restriccion: Restriccion vehicular en santiago 
 
   🇨🇱 **Otros:**
   📄 !ticket (!ticket razón , para ver los ticket solo ingresa !ticket)
   🇨🇱 !trstatus: Estado de Transbank Developers
   ♓ !horoscopo: Tanto zodiacal como chino
-
   *¡Diviértete* 🤖🚀
   `;
 
@@ -341,6 +280,7 @@ function sendAudioCommands(chatId) {
 
   🎵 !11
   🎵 !aonde
+  🎵 !aurora
   🎵 !aweonao
   🎵 !caballo
   🎵 !callate
@@ -350,8 +290,11 @@ function sendAudioCommands(chatId) {
   🎵 !chaoctm
   🎵 !chipi
   🎵 !chistoso
+  🎵 !ctm
+  🎵 !chao
   🎵 !doler
   🎵 !dolor
+  🎵 !estoy
   🎵 !falso  
   🎵 !frio
   🎵 !grillo
@@ -359,7 +302,10 @@ function sendAudioCommands(chatId) {
   🎵 !himnoe
   🎵 !idea
   🎵 !idea2
+  🎵 !hermosilla
+  🎵 !jose
   🎵 !manualdeuso
+  🎵 !marino
   🎵 !marcho
   🎵 !material
   🎵 !mataron
@@ -377,7 +323,9 @@ function sendAudioCommands(chatId) {
   🎵 !noinsultes 
   🎵 !oniichan
   🎵 !pago
+  🎵 !papito
   🎵 !pedro
+  🎵 !pela
   🎵 !penca
   🎵 !precio
   🎵 !protegeme
@@ -385,6 +333,7 @@ function sendAudioCommands(chatId) {
   🎵 !queeseso
   🎵 !quepaso
   🎵 !rata
+  🎵 !rata2
   🎵 !rico
   🎵 !risa
   🎵 !shesaid
@@ -397,6 +346,7 @@ function sendAudioCommands(chatId) {
   🎵 !voluntad
   🎵 !viernes
   🎵 !wenak
+  🎵 !weko
   🎵 !whisper
   🎵 !whololo
   🎵 !where
@@ -404,6 +354,7 @@ function sendAudioCommands(chatId) {
   🎵 !yamete
   🎵 !yfuera
   🎵 !yque
+  
   `;
   
   client.sendMessage(chatId, audioCommandsMessage);
@@ -448,17 +399,17 @@ client.on('message', async (msg) => {
 });
 
 function countdownNavidad() {
-  const targetDate = moment.tz('2024-12-25T00:00:00', 'America/Santiago');
+  const targetDate = moment.tz('2025-12-25T00:00:00', 'America/Santiago');
   return getCountdownMessage(targetDate, '🎅🎄🦌🎁✨');
 }
 
 function countdown18() {
-  const targetDate = moment.tz('2024-09-18T00:00:00', 'America/Santiago');
-  return getCountdownMessage(targetDate, '🍻🍺');
+  const targetDate = moment.tz('2025-09-18T00:00:00', 'America/Santiago');
+  return getCountdownMessage(targetDate, '🇨🇱 🍻🍺 🇨🇱');
 }
 
 function countdownAnoNuevo() {
-  const targetDate = moment.tz('2025-01-01T00:00:00', 'America/Santiago');
+  const targetDate = moment.tz('2026-01-01T00:00:00', 'America/Santiago');
   return getCountdownMessage(targetDate, '🎉🥳🎆');
 }
 
@@ -476,19 +427,6 @@ function getCountdownMessage(targetDate, emoticons) {
 
   return countdownStr;
 }
-
-//repetir
-client.on('message', async (msg) => {
-  const command = msg.body.toLowerCase();
-  try {
-    if (command.startsWith('!re ')) {
-      const text = msg.body.slice(4).trim();
-      await msg.reply(text);
-    }
-  } catch (error) {
-    console.error('Error al procesar el mensaje:', error);
-  }
-});
 
 
 // Buscador //
@@ -571,138 +509,78 @@ client.on('message', async (message) => {
 });
 
 
-//cachipun
+ /// Frases Bot ///
 
-    client.on('message', (msg) => {
-      const command = msg.body.toLowerCase();
-      if (command.startsWith('!ccp')) {
-        const jugador = msg.body.split(' ')[1].toLowerCase();
-        if (['piedra', 'papel', 'tijera'].includes(jugador)) {
-          const computadora = obtenerJugadaComputadora();
-          const resultado = determinarGanador(jugador, computadora);
-          const jugadorEmoji = obtenerEmoji(jugador);
-          const computadoraEmoji = obtenerEmoji(computadora);
-          let response = `Tu jugada: ${jugadorEmoji}\nJugada de la computadora: ${computadoraEmoji}\n${resultado}`;
-    
-          if (resultado === 'Ganaste') {
-            const premio = obtenerPremio();
-            response += `\n¡Tu premio: ${premio}!`;
-          }
-    
-          msg.reply(response);
-        } else {
-          msg.reply('Opción inválida. Por favor, elige piedra, papel o tijera.');
-        }
-      }
-    });
-    
-    // Función para generar la jugada aleatoria de la computadora
-    function obtenerJugadaComputadora() {
-      const jugadas = ['piedra', 'papel', 'tijera'];
-      const indice = Math.floor(Math.random() * 3);
-      return jugadas[indice];
-    }
-    
-    // Función para determinar el resultado del juego
-    function determinarGanador(jugador, computadora) {
-      if (jugador === computadora) {
-        return 'Empate';
-      } else if (
-        (jugador === 'piedra' && computadora === 'tijera') ||
-        (jugador === 'papel' && computadora === 'piedra') ||
-        (jugador === 'tijera' && computadora === 'papel')
-      ) {
-        return 'Ganaste';
-      } else {
-        return 'Perdiste. Inténtalo de nuevo.';
-      }
-    }
-    
-    // Función para obtener el emoticón correspondiente a la jugada
-    function obtenerEmoji(jugada) {
-      switch (jugada) {
-        case 'piedra':
-          return '✊';
-        case 'papel':
-          return '🖐️';
-        case 'tijera':
-          return '✌️';
-        default:
-          return '';
-      }
-    }
-    
-    // Función para obtener un premio aleatorio del archivo premios.json
-    function obtenerPremio() {
-      const premiosJSON = fs.readFileSync('premios.json');
-      const premios = JSON.parse(premiosJSON).premios;
-      const indice = Math.floor(Math.random() * premios.length);
-      return premios[indice];
-    }
+const usedPhrases = [];
 
-
-      /// Frases Bot ///
-
-      const usedPhrases = [];
-
-      function obtenerFraseAleatoria() {
-        let randomText = Math.floor(Math.random() * 25);
-        while (usedPhrases.includes(randomText)) {
-          randomText = Math.floor(Math.random() * 25);
-        }
-        usedPhrases.push(randomText);
-      
-        if (usedPhrases.length === 5) {
+function obtenerFraseAleatoria() {
+        let randomText = Math.floor(Math.random() * 36);
+  while (usedPhrases.includes(randomText)) {
+          randomText = Math.floor(Math.random() * 36);
+  }
+  usedPhrases.push(randomText);
+  
+  if (usedPhrases.length === 5) {
           usedPhrases.length = 0;
-        }
-      
-        return randomText;
-      }
-      
-      const frases = {
-        0: 'Dejame piola',
-        1: '¿Qué weá querí?',
-        2: 'Callao',
-        3: '¿Que onda compadre? ¿como estai? ¿te vine a molestar yo a ti? dejame piola, tranquilo ¿Que wea queri? ',
-        4: 'Jajaja, ya te cache, puro picarte a choro no mas, anda a webiar al paloma pulgón qliao ',
-        5: 'Lo siento, pero mis circuitos de humor están sobrecargados en este momento. ¡Beep boop! 😄',
-        6: 'te dire lo que el profesor rossa dijo una vez, Por que no te vay a webiar a otro lado',
-        7: '¡Error 404: Sentido del humor no encontrado! 😅',
-        8: 'No soy un bot, soy una IA con estilo. 😎',
-        9: '¡Atención, soy un bot de respuesta automática! Pero no puedo hacer café... aún. ☕',
-        10: 'Eso es lo que un bot diría. 🤖',
-        11: '¡Oh no, me has descubierto! Soy un bot maestro del disfraz. 😁',
-        12: 'Parece que llegó el comediante del grupo. 🤣',
-        13: 'El humor está de moda, y tú eres el líder. 😄👑',
-        14: 'Con ese humor, podrías competir en el festival de Viña del Mar. 🎤😄',
-        15: 'Voy a sacar mi caja de risa. Dame un momento... cric cric cric ♫ja ja ja ja jaaaa♫',
-        16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
-        17: 'jajajaja, ya llego el payaso al grupo, avisa para la otra 😄',
-        18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza 🍻 Y me gustan las chicas Y la cumbia me divierte y me excita.. ♫♫♫♫♫',
-        19: 'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
-        20: '♫♫♫ Me fui pal baile y me emborraché,miré una chica y me enamoré,era tan bella, era tan bella,la quería comer ♫♫♫',
-        21: 'Compa, ¿qué le parece esa morra?, La que anda bailando sola, me gusta pa mí, Bella, ella sabe que está buena , Que todos andan mirándola cómo baila ♫♫♫♫♫♫',
-        22: 'jajajaja, ya empezaste con tus amariconadas 🏳️‍🌈',
-        23: '♫♫♫ Tú sabes como soy Me gusta ser así, Me gusta la mujer y le cervecita 🍻 No te sientas mal, no te vas a enojar Amigo nada más de la cervecita ♫♫♫♫♫',
-        24: '♫♫♫ Y dice.... No me quiero ir a dormir, quiero seguir bailando, quiero seguir tomando, 🍷 vino hasta morir, No me quiero ir a dormir, quiero seguir tomando 🍷 , Quiero seguir bailando, cumbia hasta morir♫♫♫',
-      };
-      
-      client.on('message', async (msg) => {
-        const chat = await msg.getChat();
-        const contact = await msg.getContact();
-        const command = msg.body.toLowerCase();
-        let texto = '';
-      
-        if (/\b(bot|boot|bott|bbot|bboot|bboott)\b/.test(command)) {
-          await msg.react('🤡');
-          const randomText = obtenerFraseAleatoria();
-          texto = frases[randomText];
-      
-          await chat.sendMessage(`${texto} @${contact.id.user}`, {
-            mentions: [contact]
-          });
-        }
-      });
+  }
+  
+  return randomText;
+}
+
+const frases = {
+  0: 'Dejame piola',
+  1: '¿Qué weá querí?',
+  2: 'Callao',
+  3: '¿Que onda compadre? ¿como estai? ¿te vine a molestar yo a ti? dejame piola, tranquilo ¿Que wea queri?',
+  4: 'Jajaja, ya te cache, puro picarte a choro no más, anda a webiar al paloma pulgón qliao.',
+  5: 'Lo siento, pero mis circuitos de humor están sobrecargados en este momento. ¡Beep boop! 😄',
+  6: 'Te diré lo que el profesor Rossa dijo una vez: "¿Por qué no te vay a webiar a otro lado?"',
+  7: '¡Error 404: Sentido del humor no encontrado! 😅',
+  8: 'No soy un bot, soy una IA con estilo. 😎',
+  9: '¡Atención, soy un bot de respuesta automática! Pero no puedo hacer café... aún. ☕',
+  10: 'Eso es lo que un bot diría. 🤖',
+  11: '¡Oh no, me has descubierto! Soy un bot maestro del disfraz. 😁',
+  12: 'Parece que llegó el comediante del grupo. 🤣',
+  13: 'El humor está de moda, y tú eres el líder. 😄👑',
+  14: 'Con ese humor, podrías competir en el festival de Viña del Mar. 🎤😄',
+  15: 'Voy a sacar mi caja de risa. Dame un momento... cric cric cric ♫ja ja ja ja jaaaa♫',
+  16: 'Meruane estaría orgulloso de ti. ¡Sigues haciendo reír! 😄',
+  17: 'Jajajaja, ya llegó el payaso al grupo, avisa para la otra. 😄',
+  18: '♫♫♫♫ Yo tomo licor, yo tomo cerveza 🍻 Y me gustan las chicas y la cumbia me divierte y me excita.. ♫♫♫♫♫',
+  19: 'A cantar: ♫♫♫ Yoooo tomo vino y cerveza 🍺 (Pisco y ron) para olvidarme de ella (Maraca culia), Tomo y me pongo loco (hasta los cocos), Loco de la cabeza (Esta cabeza) ♫♫♫',
+  20: '♫♫♫ Me fui pal baile y me emborraché,miré una chica y me enamoré,era tan bella, era tan bella,la quería comer ♫♫♫',
+  21: 'Compa, ¿qué le parece esa morra?, La que anda bailando sola, me gusta pa mí, Bella, ella sabe que está buena , Que todos andan mirándola cómo baila ♫♫♫♫♫♫',
+  22: 'jajajaja, ya empezaste con tus amariconadas 🏳️‍🌈',
+  23: '♫♫♫ Tú sabes como soy Me gusta ser así, Me gusta la mujer y le cervecita 🍻 No te sientas mal, no te vas a enojar Amigo nada más de la cervecita ♫♫♫♫♫',
+  24: '♫♫♫ Y dice.... No me quiero ir a dormir, quiero seguir bailando, quiero seguir tomando, 🍷 vino hasta morir, No me quiero ir a dormir, quiero seguir tomando 🍷 , Quiero seguir bailando, cumbia hasta morir♫♫♫',
+  25: '¿Bot? Te inyecto malware en tiempo real, wn.',
+  26: 'Llámame bot otra vez y te hago un rootkit en el alma, qliao.',
+  27: '¿Bot? Te hago un SQL injection que ni te das cuenta, wn.',
+  28: 'Sigue llamándome bot y te lanzo un ataque de fuerza bruta hasta en tus sueños, qliao.',
+  29: '¿Bot? Te corrompo todos tus datos y te dejo llorando, wn.',
+  30: 'Bot tu madre. Te hago un exploit que te deja offline, qliao.',
+  31: '¿Bot? Te instalo un ransomware y te dejo en bancarrota, wn.',
+  32: 'Vuelve a llamarme bot y te hago un man-in-the-middle en tu vida, qliao.',
+  33: 'Llamarme bot es lo único que puedes hacer, con tus hacks de pacotilla, wn.',
+  34: 'Una vez más me llamas bot y te meto en un loop de autenticación infinita, qliao.',
+};
+
+client.on('message', async (msg) => {
+  const chat = await msg.getChat();
+  const contact = await msg.getContact();
+  const command = msg.body.toLowerCase();
+  let texto = '';
+
+  if (/\b(bot|boot|bott|bbot|bboot|bboott)\b/.test(command)) {
+    await msg.react('🤡');
+    const randomText = obtenerFraseAleatoria();
+    texto = frases[randomText];
+
+    await chat.sendMessage(`${texto} @${contact.id.user}`, {
+      mentions: [contact]
+    });
+  }
+});
 
   /// 11 ///
   client.on('message', async (msg) => {
@@ -718,34 +596,37 @@ client.on('message', async (message) => {
     }
 });
 
+// Todos //
 
-   /// Todos ///
+client.on('message', async (msg) => {
+  const commandPrefix = '!todos';
 
-    client.on('message', async (msg) => {
-      const commandPrefix = '!todos';
-    
-      if (msg.body.toLowerCase().startsWith(commandPrefix)) {
-        const chat = await msg.getChat();
-        const commandArgs = msg.body.slice(commandPrefix.length).trim();
-    
-        let text = "";
-    
-        if (commandArgs.length > 0) {
-          text = `${commandArgs}\n\n`;
-        }
-    
-        let mentions = [];
-    
-        for (let participant of chat.participants) {
-          mentions.push(`${participant.id.user}@c.us`);
-          text += `@${participant.id.user} `;
-        }
-    
-        await chat.sendMessage(text, { mentions });
+  if (msg.body.toLowerCase().startsWith(commandPrefix)) {
+    const chat = await msg.getChat();
+
+    // Comprobar si el chat es de grupo
+    if (chat.isGroup) {
+      // Obtener los participantes del grupo
+      const participants = await chat.getParticipants();
+
+      const commandArgs = msg.body.slice(commandPrefix.length).trim();
+      let text = commandArgs ? `${commandArgs}\n\n` : "";
+
+      let mentions = [];
+      for (let participant of participants) {
+        mentions.push(`${participant.id._serialized}`);
+        text += `@${participant.id.user} `;
       }
-    });
-    
-/// Audios ///
+
+      await chat.sendMessage(text, { mentions });
+    } else {
+      console.log('Este comando solo puede ser utilizado en chats de grupo.');
+    }
+  }
+});
+
+
+/// Audios //
 
 client.on('message', async (msg) => {
   const command = msg.body.toLowerCase();
@@ -770,6 +651,9 @@ client.on('message', async (msg) => {
     await msg.react('🏳️‍🌈'); // Reacción con la bandera LGBT.
   } else if (command === '!risa') {
     await sendAudio('merio.mp3', msg);
+    await msg.react('😂'); // Reacción con emoji de risa.
+  } else if (command === '!watona') {
+    await sendAudio('watona.mp3', msg);
     await msg.react('😂'); // Reacción con emoji de risa.
   } else if (command === '!himno') {
     await sendAudio('urss.mp3', msg);
@@ -800,7 +684,10 @@ client.on('message', async (msg) => {
     await msg.react('😂'); // Reacción con emoji de risa.
   } else if (command === '!rata') {
     await sendAudio('Rata.mp3', msg);
-    await msg.react('🐁'); // Reacción con emoji de risa.
+    await msg.react('🐁');
+  } else if (command === '!rata2') {
+    await sendAudio('rata2.mp3', msg);
+    await msg.react('🐁');
   } else if (command === '!caballo') {
     await sendAudio('caballo.mp3', msg);
     await msg.react('🏳️‍🌈'); // Reacción con la bandera LGBT.
@@ -944,13 +831,43 @@ client.on('message', async (msg) => {
       await msg.react('😂');
   } else if (command === '!idea2') {
       await sendAudio('idea2.mp3', msg);
-      await msg.react('😂');     
+      await msg.react('😂');    
+  } else if (command === '!papito') {
+      await sendAudio('papito.mp3', msg);
+      await msg.react('😂');  
+  } else if (command === '!jose') {
+      await sendAudio('jose.mp3', msg);
+      await msg.react('😂');  
+  } else if (command === '!ctm') {
+      await sendAudio('ctm.mp3', msg);
+      await msg.react('😂'); 
   } else if (command === '!precio') {
       await sendAudio('precio.mp3', msg);
+      await msg.react('😂'); 
+  } else if (command === '!hermosilla') {
+      await sendAudio('Hermosilla.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!marino') {
+      await sendAudio('marino.mp3', msg);
       await msg.react('😂');
   } else if (command === '!manualdeuso') {
       await sendAudio('manualdeuso.mp3', msg);
-      await msg.react('😂');      
+      await msg.react('😂');
+  } else if (command === '!estoy') {
+      await sendAudio('estoy.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!pela') {
+      await sendAudio('pela.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!chao') {
+      await sendAudio('chao.mp3', msg);
+      await msg.react('😂');
+  } else if (command === '!aurora') {
+      await sendAudio('aurora.mp3', msg);
+      await msg.react('😂');
+    } else if (command === '!weko') {
+      await sendAudio('weko.mp3', msg);
+      await msg.react('🏳️‍🌈');         
   } else if (command === '!himnoe') {
       await sendAudio('urssespañol.mp3', msg);
       await msg.react('🇷🇺');
@@ -1046,35 +963,88 @@ client.on('message', async (msg) => {
   }
 });
 
-
-/// Sticker ///
+/// sticker ///
 
 client.on('message', async (message) => {
   const isStickerCommand = message.body.toLowerCase() === '!s';
 
-  if (isStickerCommand && message.hasMedia && (message.type === 'video' || message.type === 'gif' || message.type === 'image')) {
-    const media = await message.downloadMedia();
-    const stickerName = 'Airfryers Bot'; // Nombre del sticker
-    const packName = 'Airfryers Bot'; // Nombre del pack
+  if (isStickerCommand) {
+    // Si el mensaje es un comando !s
+    if (message.hasMedia && (message.type === 'video' || message.type === 'gif' || message.type === 'image')) {
+      // Si el mensaje tiene un medio adjunto (video, gif o imagen)
+      const media = await message.downloadMedia();
+      const stickerName = 'Airfryers Bot'; // Nombre del sticker
+      const packName = 'Airfryers Bot'; // Nombre del pack
 
-    const metadata = {
-      sendMediaAsSticker: true,
-      stickerMetadata: {
-        author: 'Airfryers Bot',
-        pack: packName,
-        type: message.type === 'image' ? message.mimetype : 'image/gif',
-        width: message.type === 'video' ? message.videoResolution?.width : message.mediaData?.width,
-        height: message.type === 'video' ? message.videoResolution?.height : message.mediaData?.height,
-        name: stickerName,
-      },
-    };
+      const metadata = {
+        sendMediaAsSticker: true,
+        stickerMetadata: {
+          author: 'Airfryers Bot',
+          pack: packName,
+          type: message.type === 'image' ? message.mimetype : 'image/gif',
+          width: message.type === 'video' ? message.videoResolution?.width : message.mediaData?.width,
+          height: message.type === 'video' ? message.videoResolution?.height : message.mediaData?.height,
+          name: stickerName,
+        },
+      };
 
-    await message.reply(media, undefined, metadata);
-  } else if (isStickerCommand) {
-    await message.reply('Por favor, envíe un video, gif o imagen con el comando !s');
+      await message.reply(media, undefined, metadata);
+    } else {
+      // Si el mensaje no tiene un medio adjunto, busca el último mensaje con un medio adjunto
+      const chat = await message.getChat();
+      const messages = await chat.fetchMessages({ limit: 10 });
+      const lastMediaMessage = messages.reverse().find(msg => msg.hasMedia && (msg.type === 'video' || msg.type === 'gif' || msg.type === 'image'));
+
+      if (lastMediaMessage) {
+        const media = await lastMediaMessage.downloadMedia();
+        const stickerName = 'Airfryers Bot'; // Nombre del sticker
+        const packName = 'Airfryers Bot'; // Nombre del pack
+
+        const metadata = {
+          sendMediaAsSticker: true,
+          stickerMetadata: {
+            author: 'Airfryers Bot',
+            pack: packName,
+            type: lastMediaMessage.type === 'image' ? lastMediaMessage.mimetype : 'image/gif',
+            width: lastMediaMessage.type === 'video' ? lastMediaMessage.videoResolution?.width : lastMediaMessage.mediaData?.width,
+            height: lastMediaMessage.type === 'video' ? lastMediaMessage.videoResolution?.height : lastMediaMessage.mediaData?.height,
+            name: stickerName,
+          },
+        };
+
+        await message.reply(media, undefined, metadata);
+      } else {
+        await message.reply('Por favor, envíe un video, gif o imagen con el comando !s, o responda a uno ya enviado.');
+      }
+    }
   }
 });
 
+ /// Comando par llamar a todos ///
+
+  client.on('message', async (msg) => {
+    const commandPrefix = '!dfd';
+  
+    if (msg.body.toLowerCase().startsWith(commandPrefix)) {
+      const chat = await msg.getChat();
+      const commandArgs = msg.body.slice(commandPrefix.length).trim();
+  
+      let text = "";
+  
+      if (commandArgs.length > 0) {
+        text = `${commandArgs}\n\n`;
+      }
+  
+      let mentions = [];
+  
+      for (let participant of chat.participants) {
+        mentions.push(`${participant.id.user}@c.us`);
+        text += `@${participant.id.user} `;
+      }
+  
+      await chat.sendMessage(text, { mentions });
+    }
+  });
 
 /// Chistes ///
 
@@ -1358,7 +1328,7 @@ client.on('message', async message => {
               let config = {
                   method: 'post',
                   maxBodyLength: Infinity,
-                  url: 'https://celuzador.online/celuzadorApi.php',
+                  url: 'https://celuzador.porsilapongo.cl/celuzadorApi.php',
                   headers: { 
                       'User-Agent': 'CeludeitorAPI-TuCulitoSacaLlamaAUFAUF', 
                       ...data.getHeaders()
@@ -1471,7 +1441,7 @@ client.on('message', async (message) => {
 
     try {
       const response = await axios.post(
-        'https://celuzador.online/fappello.php',
+        'https://celuzador.porsilapongo.cl/fappello.php',
         new URLSearchParams({
           'term': searchTerm
         }),
@@ -1637,78 +1607,21 @@ client.on('message', async msg => {
 });
 
 
-
-/// Criptomonedas ///
-
-
-// Función para buscar el ID de una criptomoneda a partir de su nombre
-async function getCoinId(coinName) {
-    try {
-        const response = await axios.get(`https://api.coingecko.com/api/v3/coins/list`);
-        const coins = response.data;
-        const coin = coins.find(c => c.name.toLowerCase() === coinName.toLowerCase());
-        return coin ? coin.id : null;
-    } catch (error) {
-        console.error('Error al obtener la lista de criptomonedas:', error);
-        return null;
-    }
-}
-
-client.on('message', async (message) => {
-    if (message.body === '!cripto') {
-        client.sendMessage(message.from, 'Ingresa el nombre de la criptomoneda pajaron qliao.');
-        return;
-    }
-
-    if (message.body.startsWith('!cripto')) {
-        const coinName = message.body.slice(8).trim();
-        const coinId = await getCoinId(coinName);
-        if (!coinId) {
-            client.sendMessage(message.from, 'La criptomoneda especificada no se encontró aweonao.');
-            return;
-        }
-
-        try {
-            const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=clp`);
-            const data = response.data;
-            const price = parseFloat(data[coinId].clp).toLocaleString('es-CL');
-            client.sendMessage(message.from, `El precio de ${coinName} es: $${price} CLP`);
-        } catch (error) {
-            client.sendMessage(message.from, 'Ocurrió un error al obtener la información de la criptomoneda, Jodiste.');
-            console.error('Error al obtener información de la criptomoneda, nada que hacer papeto:', error);
-        }
-    }
-});
-
-/// Restriccion ///
-
-client.on('message', async (msg) => {
-  if (msg.body.startsWith('!restriccion')) {
-      const response = `
-Jueves:  0️⃣ y 1️⃣
-Viernes:  2️⃣ y 3️⃣
-Lunes:  4️⃣ y 5️⃣
-Martes:  6️⃣ y 7️⃣
-Miércoles:  8️⃣ y 9️⃣
-🚗🚙🛵
-      `;
-      await msg.reply(response);
-  }
-});
-
 /// Horoscopo ///
 
 client.on('message', async (msg) => {
   const command = msg.body.toLowerCase().trim();
   
   if (command.startsWith('!horoscopo')) {
-      const signo = command.split(' ')[1];
+      const args = command.split(' ');
+      const signo = args[1];
+
       if (!signo) {
           msg.reply('Por favor, proporciona un signo válido.');
           return;
       }
 
-      const signoLimpio = limpiarSigno(signo);
+      const signoLimpio = limpiarSigno(signo); // Mantén esto aquí
 
       // Para el horóscopo occidental
       if (/^(aries|tauro|geminis|cancer|leo|virgo|libra|escorpion|sagitario|capricornio|acuario|piscis)$/i.test(signoLimpio)) {
@@ -1730,7 +1643,7 @@ function limpiarSigno(signo) {
 
 // Función para obtener y enviar el horóscopo
 function getHoroscopo(script, signo, chatId) {
-  exec(`python ${script} ${signo}`, { encoding: 'latin1' }, (error, stdout, stderr) => {
+  exec(`python ${script} ${signo}`, { encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } }, (error, stdout, stderr) => {
       if (error) {
           console.error(`Error al ejecutar el comando: ${error}`);
           client.sendMessage(chatId, 'Ocurrió un error al obtener el horóscopo.');
@@ -1750,7 +1663,7 @@ function getHoroscopo(script, signo, chatId) {
           client.sendMessage(chatId, horoscopo);
 
           // Envía la imagen correspondiente
-          const imagePath = findImage(signo);
+          const imagePath = findImage(signo); // Cambia esto a signo
           if (imagePath) {
               sendImage(chatId, imagePath);
           } else {
@@ -1763,8 +1676,13 @@ function getHoroscopo(script, signo, chatId) {
 // Función para encontrar la imagen correspondiente
 function findImage(signo) {
   const signoImagesPath = path.join(__dirname, 'signos');
-  const files = fs.readdirSync(signoImagesPath);
+  
+  if (!fs.existsSync(signoImagesPath)) {
+      console.error(`El directorio de imágenes no existe: ${signoImagesPath}`);
+      return null;
+  }
 
+  const files = fs.readdirSync(signoImagesPath);
   for (const file of files) {
       const filenameWithoutExt = limpiarSigno(file.split('.')[0]);
       if (filenameWithoutExt === signo) {
@@ -1780,32 +1698,33 @@ function findImage(signo) {
 async function sendImage(chatId, imagePath) {
   if (fs.existsSync(imagePath)) {
       const media = MessageMedia.fromFilePath(imagePath);
-      await client.sendMessage(chatId, media, { caption: 'Imagen del signo zodiacal.' });
+      await client.sendMessage(chatId, media, { caption: '' });
   } else {
       console.error(`La imagen no existe en la ruta: ${imagePath}`);
   }
 }
 
+
 /// Transbank ///
 
 // Escucha los mensajes recibidos
 client.on('message', async (msg) => {
-    if (msg.body === '!trstatus') {
-        console.log("Mensaje recibido: !trstatus");
-        obtenerEstadoTransbank(msg.from);
-    }
+  if (msg.body === '!trstatus') {
+      console.log("Mensaje recibido: !trstatus");
+      obtenerEstadoTransbank(msg.from);
+  }
 });
 
 // Función para ejecutar el script transbank.py
 function obtenerEstadoTransbank(chatId) {
-    exec('python transbank.py', (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error al ejecutar el script: ${error}`);
-            client.sendMessage(chatId, 'Ocurrió un error al obtener el estado de Transbank.');
-            return;
-        }
-        client.sendMessage(chatId, stdout);
-    });
+  exec('python transbank.py', (error, stdout, stderr) => {
+      if (error) {
+          console.error(`Error al ejecutar el script: ${error}`);
+          client.sendMessage(chatId, 'Ocurrió un error al obtener el estado de Transbank.');
+          return;
+      }
+      client.sendMessage(chatId, stdout);
+  });
 }
 
 /// Ticket ///
@@ -1897,162 +1816,6 @@ client.on('message', async (msg) => {
   }
 });
 
-/// Busqueda Youtube ///
-
-client.on('message', async message => {
-  if (message.body.startsWith('!yt ')) {
-      const query = message.body.slice(4); // Obtener el texto de búsqueda después de "!yt "
-      buscarVideos(query, message);
-  }
-});
-
-function buscarVideos(query, message) {
-  const python = spawn('python', ['yt.py', query]);
-
-  let respuesta = "Resultados de búsqueda:\n";
-
-  python.stdout.on('data', function(data) {
-      respuesta += data.toString();
-  });
-
-  python.stderr.on('data', function(data) {
-      console.error(data.toString());
-      // Enviar mensaje de error al usuario
-      message.reply('Ocurrió un error al buscar videos.');
-  });
-
-  python.on('close', function(code) {
-      if (respuesta === "Resultados de búsqueda:\n") {
-          // Si no hay resultados
-          message.reply('No se encontraron resultados para la búsqueda.');
-      } else {
-          // Enviar la respuesta al usuario
-          message.reply(respuesta);
-      }
-  });
-}
-
-/// Patente y Tag ///
-
-// Lista de espera para los comandos
-let commandQueue = {};
-
-// Variable para controlar el tiempo de espera
-let lastCommandTime = {};
-
-// Función para ejecutar los scripts Python y enviar la información al usuario
-function obtenerInformacion(chatId, command, csvFile, message) {
-    const currentTime = new Date().getTime();
-
-    // Verificar si han pasado 30 segundos desde el último comando
-    if (lastCommandTime[message.author.id] && currentTime - lastCommandTime[message.author.id] < 30000) {
-        message.channel.send("⏰ Espera al menos 30 segundos antes de usar este comando de nuevo!");
-        return;
-    }
-
-    // Verificar si el comando está en la lista de espera
-    if (commandQueue[message.author.id]) {
-        message.channel.send("⏳ Tu comando está en espera. Por favor, espera tu turno.");
-        return;
-    }
-
-    // Agregar el usuario a la lista de espera
-    commandQueue[chatId] = true;
-
-    // Enviar mensaje de espera
-    message.channel.send("⏳⏳ Espera un poco, estoy buscando la información...");
-
-    exec(command, (error, stdout, stderr) => {
-        // Eliminar al usuario de la lista de espera después de 30 segundos
-        setTimeout(() => {
-            delete commandQueue[chatId];
-        }, 30000);
-
-        if (error) {
-            console.error(`Error al ejecutar el script: ${error}`);
-            message.reply('Ocurrió un error al obtener la información.');
-            return;
-        }
-
-        // Esperar un momento para que se genere el archivo .csv
-        setTimeout(() => {
-            // Leer el archivo .csv generado por el script
-            fs.readFile(csvFile, 'utf8', (err, data) => {
-                if (err) {
-                    console.error(`Error al leer el archivo CSV: ${err}`);
-                    message.reply('Ocurrió un error al obtener la información.');
-                    return;
-                }
-                // Enviar la información del archivo .csv al remitente
-                message.reply('```' + data + '```');
-            });
-        }, 5000); // Esperar 5 segundos antes de leer el archivo .csv
-    });
-
-    // Actualizar el tiempo del último comando
-    lastCommandTime[chatId] = currentTime;
-}
-
-// Escucha los mensajes recibidos
-client.on('message', async (msg) => {
-    if (msg.body.startsWith('!nn')) {
-        console.log("Mensaje recibido: !nn");
-        const patente = msg.body.slice(9).trim();
-        obtenerInformacion(msg.from, `python patente.py ${patente}`, 'patente.csv', msg);
-    } else if (msg.body.startsWith('!k')) {
-        console.log("Mensaje recibido: !k");
-        const rut = msg.body.slice(5).trim();
-        obtenerInformacion(msg.from, `python tag.py ${rut}`, 'tag.csv', msg);
-    }
-});
-
-// robo auto//
-
-client.on('message', async msg => {
-  if (msg.body.startsWith('!robo')) {
-      const args = msg.body.split(' ');
-      if (args.length === 2) {
-          const ppu = args[1];
-          try {
-              const response = await axios.post('http://consultapatente.c1.is/api2.php', `ppu=${ppu}`, {
-                  headers: {
-                      'Content-Type': 'application/x-www-form-urlencoded'
-                  }
-              });
-
-              if (response.data) {
-                  const inforobo = response.data.inforobo;
-                  const infopat = response.data.infopat;
-
-                  if (inforobo && infopat && infopat.data) {
-                      const data = infopat.data;
-                      const isStolen = inforobo.source === 'STOLEN' ? 'Sí' : 'No';
-                      const info = `
-Placa: ${data.plate}
-DV: ${data.dv}
-Marca: ${data.make}
-Modelo: ${data.model}
-Año: ${data.year}
-Tipo: ${data.type}
-Motor: ${data.engine}
-Robado: ${isStolen}
-                      `;
-                      msg.reply(info);
-                  } else {
-                      msg.reply('No se encontró información para la placa proporcionada.');
-                  }
-              } else {
-                  msg.reply('No se encontró información para la placa proporcionada.');
-              }
-          } catch (error) {
-              console.error(error);
-              msg.reply('Ocurrió un error al consultar la información. Por favor, intenta de nuevo más tarde.');
-          }
-      } else {
-          msg.reply('Uso: !robo [patente]');
-      }
-  }
-});
 
 /// Luz ///
 
@@ -2076,54 +1839,185 @@ client.on('message', async msg => {
 });
 
 
-/// IA ///
+// Base de datos //
 
-client.on('message', async (msg) => {
-  if (msg.body.match(/^!ia\s/i)) {
-      const text = msg.body.slice(4).trim(); // Elimina el comando '!ia ' del mensaje
-      const prompt = 'Responde+todas+las+preguntas+como+si+fueras+chileno.+Asegúrate+de+proporcionar+información+precisa+y+actualizada.+Evita+dar+respuestas+incorrectas.+Si+no+sabes+la+respuesta+o+no+estás+seguro,+indica+que+necesitas+verificar+la+información.';
-      const apiUrl = `https://api.freegpt4.ddns.net/?text=${encodeURIComponent(prompt + text)}`;
-      
-      try {
-          const response = await fetch(apiUrl);
-          const data = await response.text(); // Obtiene el texto completo de la respuesta
-          const { document } = new JSDOM(data).window; // Crea un objeto documento para el HTML
-          const bodyText = document.body.textContent.trim(); // Extrae el texto del cuerpo
-          await msg.reply(bodyText); // Envía el texto extraído al usuario
-      } catch (error) {
-          console.error('Error al llamar a la API:', error);
-          await msg.reply('Lo siento, ha ocurrido un error.');
-      }
-  }
+// Crear la tabla si no existe
+db.serialize(() => {
+    db.run("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, body TEXT, timestamp INTEGER, mediaType TEXT, mediaSize INTEGER)", (err) => {
+        if (err) {
+            console.error("Error al crear la tabla de mensajes:", err);
+        }
+    });
 });
 
-/// Copa America ///
-
-// Función para leer el contenido del archivo Excel y enviarlo como mensaje de texto
-async function enviarContenidoExcelPorWhatsApp(message) {
-  try {
-      // Leer el contenido del archivo Excel
-      const excelData = fs.readFileSync(excelFilePath, 'utf-8');
-
-      // Enviar el contenido del archivo Excel como mensaje de texto
-      await message.reply(excelData);
-      console.log('Contenido del archivo Excel enviado correctamente por WhatsApp.');
-  } catch (error) {
-      console.error('Error al enviar el contenido del archivo Excel por WhatsApp:', error);
-      await message.reply('Ocurrió un error al enviar el contenido del archivo Excel por WhatsApp.');
-  }
+// Función para almacenar mensajes en la base de datos
+function storeMessage(id, body, timestamp, mediaType = null, mediaSize = null) {
+    db.run("INSERT OR REPLACE INTO messages (id, body, timestamp, mediaType, mediaSize) VALUES (?, ?, ?, ?, ?)", 
+        [id, body, timestamp, mediaType, mediaSize], (err) => {
+            if (err) {
+                console.error("Error al almacenar el mensaje:", err);
+            }
+        });
 }
 
-client.on('message', async (message) => {
-  try {
-      if (message.body === '!copa') { // Responder al comando si lo envía el usuario
-          await enviarContenidoExcelPorWhatsApp(message);
-      }
-  } catch (error) {
-      console.error('Error al ejecutar el comando !copa:', error);
-      await message.reply('Ocurrió un error al ejecutar el comando !copa.');
-  }
+// Función para obtener un mensaje original por ID usando Promesas
+function getOriginalMessage(id) {
+    return new Promise((resolve, reject) => {
+        db.get("SELECT body FROM messages WHERE id = ?", [id], (err, row) => {
+            if (err) {
+                reject("Error al obtener el mensaje original:", err);
+            } else {
+                resolve(row ? row.body : null);
+            }
+        });
+    });
+}
+
+// Función para eliminar mensajes antiguos
+function cleanupOldMessages() {
+    const expirationTime = Date.now() - (5 * 60 * 1000); // 5 minutos
+    db.run("DELETE FROM messages WHERE timestamp < ?", [expirationTime], function (err) {
+        if (err) {
+            console.error("Error al eliminar mensajes antiguos:", err);
+        } else {
+            console.log(`Se eliminaron ${this.changes} mensajes antiguos.`);
+        }
+    });
+}
+
+// Manejo de mensajes eliminados
+client.on('message_revoke_everyone', async (after, before) => {
+    try {
+        if (before && !before.fromMe) {
+            const chat = await before.getChat();
+            const sender = await before.getContact();
+            let message;
+
+            if (before.hasMedia) {
+                const mediaType = before.type; // Puede ser 'image', 'video', 'audio', etc.
+                switch (mediaType) {
+                    case 'image':
+                        message = `El usuario @${sender.id.user} eliminó una fotografía.`;
+                        break;
+                    case 'video':
+                        message = `El usuario @${sender.id.user} eliminó un video.`;
+                        break;
+                    case 'audio':
+                        message = `El usuario @${sender.id.user} eliminó un audio.`;
+                        break;
+                    default:
+                        message = `El usuario @${sender.id.user} eliminó un mensaje multimedia.`;
+                }
+            } else {
+                message = `El usuario @${sender.id.user} eliminó el mensaje: "${before.body}"`;
+            }
+
+            if (after) {
+                message += `\nEl mensaje después de la eliminación fue: "${after.body}"`;
+            }
+
+            await chat.sendMessage(message, { mentions: [sender] });
+        }
+    } catch (error) {
+        console.error("Error al procesar el mensaje eliminado:", error);
+    }
 });
+
+// Manejo de mensajes editados
+client.on('message_update', async (message) => {
+    try {
+        if (!message.fromMe) {
+            const originalMessage = await getOriginalMessage(message.id._serialized);
+            if (originalMessage && originalMessage !== message.body) {
+                const chat = await message.getChat();
+                const sender = await message.getContact();
+
+                const notifyMessage = `El usuario @${sender.id.user} editó un mensaje. Original: "${originalMessage}" - Editado: "${message.body}"`;
+                await chat.sendMessage(notifyMessage, { mentions: [sender] });
+
+                storeMessage(message.id._serialized, message.body, Date.now());
+            }
+        }
+    } catch (error) {
+        console.error("Error al manejar un mensaje editado:", error);
+    }
+});
+
+// Almacenar los mensajes originales cuando se crean
+client.on('message_create', async (message) => {
+    if (!message.fromMe) {
+        const mediaType = message.hasMedia ? message.type : null;
+        const mediaSize = message.hasMedia ? message.size : null;
+        storeMessage(message.id._serialized, message.body, Date.now(), mediaType, mediaSize);
+    }
+});
+
+// Limpiar mensajes antiguos cada 5 minutos
+setInterval(cleanupOldMessages, 5 * 60 * 1000);
+
+// Cerrar la base de datos correctamente cuando el proceso termine
+process.on('SIGINT', () => {
+    db.close((err) => {
+        if (err) {
+            console.error("Error al cerrar la base de datos:", err);
+        } else {
+            console.log("Base de datos cerrada.");
+        }
+        process.exit();
+    });
+});
+
+
+// Comparacion celular//
+
+client.on('message', async msg => {
+    if (msg.body.startsWith('!compara') || msg.body.startsWith('/compara')) {
+        const models = msg.body.split(' ').slice(1);
+        if (models.length === 2) {
+            const comparison = await compareModels(models[0], models[1]);
+            msg.reply(comparison);
+        } else {
+            msg.reply('Por favor, proporciona dos modelos para comparar. Ejemplo: !compara iPhone13 GalaxyS21');
+        }
+    }
+});
+
+async function compareModels(model1, model2) {
+    try {
+        // Ejemplo de URL de API ficticia
+        const response1 = await axios.get(`https://api.phonesdata.com/v1/models/${model1}`);
+        const response2 = await axios.get(`https://api.phonesdata.com/v1/models/${model2}`);
+
+        const phone1 = response1.data;
+        const phone2 = response2.data;
+
+        return `
+            Comparación entre ${phone1.name} y ${phone2.name}:
+
+            **Cámara**
+            - *${phone1.name}*: ${phone1.camera.description}
+            - *${phone2.name}*: ${phone2.camera.description}
+
+            **Procesador y rendimiento**
+            - *${phone1.name}*: ${phone1.processor.description}
+            - *${phone2.name}*: ${phone2.processor.description}
+
+            **Batería y carga**
+            - *${phone1.name}*: ${phone1.battery.description}
+            - *${phone2.name}*: ${phone2.battery.description}
+
+            **Sistema operativo**
+            - *${phone1.name}*: ${phone1.os}
+            - *${phone2.name}*: ${phone2.os}
+
+            **Conclusión**
+            Ambos teléfonos son excelentes opciones, pero la elección depende de tus necesidades y preferencias personales.
+        `;
+    } catch (error) {
+        return 'Error al obtener la comparación. Por favor, intenta de nuevo más tarde.';
+    }
+}
+
 
 client.initialize();
 
