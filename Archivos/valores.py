@@ -1,104 +1,115 @@
-import requests
-from bs4 import BeautifulSoup
-import sys
 import asyncio
 import aiohttp
-import re
+from bs4 import BeautifulSoup
+import sys
+import requests
+from datetime import datetime
 
 # Establecer la codificación de la salida estándar a UTF-8
 sys.stdout.reconfigure(encoding='utf-8')
 
-async def obtener_valor_google(session, url):
+# Limitar el número de solicitudes simultáneas
+MAX_CONCURRENT_REQUESTS = 5
+
+def obtener_santoral():
+    url = "https://api.boostr.cl/santorales/hoy.json"
+    headers = {"accept": "application/json"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        if 'data' in data and len(data['data']) > 0:
+            return data['data'][0]  # Obtenemos solo el primer nombre
+        else:
+            return "No se encontró el santoral en la respuesta"
+    else:
+        return "No se pudo obtener el santoral"
+
+async def obtener_html(session, url):
     try:
         async with session.get(url) as response:
             if response.status == 200:
-                html = await response.text()
-                soup = BeautifulSoup(html, 'html.parser')
-                div_valor = soup.find('div', class_='YMlKec fxKbKc')
-                if div_valor:
-                    return div_valor.text.strip().replace('.', ',')
-                else:
-                    return None
+                return await response.text()
             else:
-                print(f"No se pudo acceder a la página {url}")
+                print(f"No se pudo acceder a la página {url}", file=sys.stderr)
                 return None
     except Exception as e:
-        print(f"Error al obtener el valor desde {url}: {e}")
+        print(f"Error al obtener HTML desde {url}: {e}", file=sys.stderr)
         return None
 
-async def obtener_valores_divisas():
-    async with aiohttp.ClientSession() as session:
-        urls = {
-            '💵 USD Google': 'https://www.google.com/finance/quote/USD-CLP',
-            '💶 EUR': 'https://www.google.com/finance/quote/EUR-CLP',
-            '🇦🇷 ARG$': 'https://www.google.com/finance/quote/ARS-CLP',
-            '🇵🇪 SOL': 'https://www.google.com/finance/quote/PEN-CLP'
-        }
-        tareas = []
-        for nombre, url in urls.items():
-            tareas.append(obtener_valor_google(session, url))
-        resultados = await asyncio.gather(*tareas)
-        return dict(zip(urls.keys(), resultados))
-
-async def obtener_valor_dolar_indicador():
-    try:
-        url = 'https://mindicador.cl/api/dolar'
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data['serie'][0]['valor']
-                else:
-                    print("No se pudo obtener el valor del dólar desde el indicador personalizado.")
-                    return None
-    except Exception as e:
-        print(f"Error al obtener el valor del dólar desde el indicador personalizado: {e}")
+async def obtener_valor_google(session, url, semaphore):
+    async with semaphore:
+        html = await obtener_html(session, url)
+        if html:
+            soup = BeautifulSoup(html, 'html.parser')
+            div_valor = soup.find('div', class_='YMlKec fxKbKc')
+            if div_valor:
+                return div_valor.text.strip().replace(",", "")
         return None
 
-async def obtener_valores_uf_utm():
-    try:
-        url_uf = 'https://valoruf.cl/'
-        url_utm = 'https://calculadorautm.cl/'
-        async with aiohttp.ClientSession() as session:
-            uf_response = await session.get(url_uf)
-            utm_response = await session.get(url_utm)
-            if uf_response.status == 200 and utm_response.status == 200:
-                uf_html = await uf_response.text()
-                utm_html = await utm_response.text()
-                uf_soup = BeautifulSoup(uf_html, 'html.parser')
-                utm_soup = BeautifulSoup(utm_html, 'html.parser')
-                uf_valor = uf_soup.find('span', class_='vpr').text.strip().replace('$', '').replace('.', '').replace(',', '.')
-                utm_valor_strong = utm_soup.find('strong')
-                utm_valor = utm_valor_strong.text.strip().split('=')[-1].strip().replace(' CLP', '').replace('.', ',')
-                return uf_valor, utm_valor
-            else:
-                print("No se pudo obtener los valores de UF y UTM.")
-                return None, None
-    except Exception as e:
-        print(f"Error al obtener los valores de UF y UTM: {e}")
-        return None, None
+async def obtener_valores_divisas(session):
+    urls = {
+        '💵 USD Google': 'https://www.google.com/finance/quote/USD-CLP',
+        '🇪🇺💶': 'https://www.google.com/finance/quote/EUR-CLP',
+        '🇦🇷💰': 'https://www.google.com/finance/quote/ARS-CLP',
+        '🇵🇪💰': 'https://www.google.com/finance/quote/PEN-CLP',
+        '🇧🇴💰': 'https://www.google.com/finance/quote/BOB-CLP',
+        '🇨🇴💰': 'https://www.google.com/finance/quote/COP-CLP',
+        '🇯🇵💰': 'https://www.google.com/finance/quote/JPY-CLP',
+    }
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+    tareas = [obtener_valor_google(session, url, semaphore) for url in urls.values()]
+    resultados = await asyncio.gather(*tareas)
+    return dict(zip(urls.keys(), resultados))
+
+def formatear_con_separadores(valor):
+    return "{:,}".format(int(float(valor))).replace(",", ".")
+
+def formatear_con_decimales(valor):
+    return "{:,.2f}".format(float(valor)).replace(",", ".")
+
+def obtener_indicadores():
+    url = "https://api.boostr.cl/economy/indicators.json"
+    headers = {"accept": "application/json"}
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if data['status'] == 'success':
+            indicadores = data['data']
+            
+            print(f"💵 USD: ${formatear_con_separadores(indicadores['dolar']['value'])}")
+            print(f"🇨🇱 UF: ${formatear_con_separadores(indicadores['uf']['value'])}")
+            print(f"🇪🇺💶: €{formatear_con_separadores(indicadores['euro']['value'])}")
+            print(f"🇨🇱 UTM: ${formatear_con_separadores(indicadores['utm']['value'])}")
+            print(f"🇨🇱 IPC ({indicadores['ipc']['date'][5:7]}-{indicadores['ipc']['date'][:4]}): {indicadores['ipc']['value']}%")
+        else:
+            print("Error: No se pudo obtener los indicadores.")
+    else:
+        print("Error: No se pudo conectar con la API.")
 
 async def main():
-    valor_dolar_indicador = await obtener_valor_dolar_indicador()
-    if valor_dolar_indicador:
-        print(f"💵 USD Mi Indicador : ${str(valor_dolar_indicador).replace('.', ',')}\n")
+    santoral = obtener_santoral()
+    ahora = datetime.now()
+    fecha = ahora.strftime("%d-%m-%Y")
+    hora = ahora.strftime("%H:%M")
+    print(f"Fecha: {fecha}")
+    print(f"Hora: {hora}")
+    print(f"Santoral: {santoral}\n")
 
-    valores_divisas = await obtener_valores_divisas()
-    if valores_divisas:
-        for divisa, valor in valores_divisas.items():
-            valor = re.sub(r'[^\d.,]', '', valor)  # Eliminar caracteres no numéricos excepto puntos y comas
-            valor = valor.replace('.', '').replace(',', '.')  # Reemplazar las comas por puntos para permitir la conversión a float
-            valor = "{:,.2f}".format(float(valor))  # Formatear el valor con dos decimales y separador de miles
-            print(f"{divisa} : ${valor}\n")
+    obtener_indicadores()
+    
+    async with aiohttp.ClientSession() as session:
+        valores_divisas = await obtener_valores_divisas(session)
 
-    uf_valor, utm_valor = await obtener_valores_uf_utm()
-    if uf_valor and utm_valor:
-        uf_valor = uf_valor.replace('.', ',')  # Reemplazar el punto por la coma para separar los miles
-        utm_valor = utm_valor.replace('.', ',')  # Reemplazar el punto por la coma para separar los miles
-
-        print(f"🇨🇱💲 UF : ${uf_valor}\n")
-        print(f"🇨🇱💲 UTM : {utm_valor}\n")
-
+        if valores_divisas:
+            print(f"💵 USD Google : ${formatear_con_separadores(valores_divisas['💵 USD Google'])}")
+            print("\n---- Otras monedas a peso ----")
+            for divisa in ['🇦🇷💰', '🇵🇪💰', '🇧🇴💰', '🇨🇴💰', '🇯🇵💰']:
+                if divisa in valores_divisas and valores_divisas[divisa]:
+                    print(f"{divisa} : ${formatear_con_decimales(valores_divisas[divisa])}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(f"Error en el script principal: {e}", file=sys.stderr)

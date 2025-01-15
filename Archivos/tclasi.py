@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import date
 import unidecode
 from tabulate import tabulate
+from IPython.display import display, HTML
 
 # Configurar la codificación de caracteres de la consola a UTF-8
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
@@ -37,11 +38,28 @@ for i in pt:
         break
     count += 1
 
+# Diccionario de banderas
+banderas = {
+    'Argentina': '🇦🇷',
+    'Colombia': '🇨🇴',
+    'Uruguay': '🇺🇾',
+    'Ecuador': '🇪🇨',
+    'Brasil': '🇧🇷',
+    'Venezuela': '🇻🇪',
+    'Paraguay': '🇵🇾',
+    'Bolivia': '🇧🇴',
+    'Chile': '🇨🇱',
+    'Peru': '🇵🇪'
+}
+
+# Agregar banderas
+equipos_banderas = [f"{banderas.get(equipo, '')} {equipo}" for equipo in equipos]
+
 # Crear DataFrame
-df = pd.DataFrame({'Posición': list(range(1, 11)), 'Equipo': equipos, 'Puntos': puntos})
+df = pd.DataFrame({'Posición': list(range(1, 11)), 'Equipo': equipos_banderas, 'Puntos': puntos})
 
 # Reducción del tamaño de las columnas para adaptar a pantalla de WhatsApp
-df['Equipo'] = df['Equipo'].str.slice(0, 13)
+df['Equipo'] = df['Equipo'].str.slice(0, 20)
 df['Puntos'] = df['Puntos'].str.slice(0, 6)
 
 # Guardar tabla en archivo CSV

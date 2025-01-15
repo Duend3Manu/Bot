@@ -10,7 +10,11 @@ page = requests.get(url)
 soup = BeautifulSoup(page.content, 'html.parser')
 
 lines = ['Línea 1', 'Línea 2', 'Línea 3', 'Línea 4', 'Línea 4a', 'Línea 5', 'Línea 6']
-statuses = {'estado1': 'Estación Operativa', 'estado4': 'Accesos Cerrados', 'estado2': 'Estación Cerrada Temporalmente'}
+statuses = {
+    'estado1': 'Estación Operativa',
+    'estado4': 'Accesos Cerrados',
+    'estado2': 'Estación Cerrada Temporalmente'
+}
 
 colors = {
     'Línea 1': '🔴',
@@ -22,24 +26,57 @@ colors = {
     'Línea 6': '🟣'
 }
 
-problems = []
+def get_status(class_name):
+    """Devuelve el estado correspondiente a la clase."""
+    return statuses.get(class_name, 'Desconocido')
 
-for line in lines:
-    line_result = soup.find('strong', string=line)
-    line_status = 'Operativa'
-    if line_result:
-        station_results = line_result.find_next('ul').find_all('li')
-        for station_result in station_results:
-            station_name = station_result.text.strip()
-            station_status = statuses[station_result['class'][0]]
-            if station_status in ['Accesos Cerrados', 'Estación Cerrada Temporalmente']:
-                print(f'{colors[line]} {unidecode(line)}: {station_name} - {station_status}')
-                problems.append(station_name)
-                if station_status == 'Estación Cerrada Temporalmente':
-                    line_status = 'Cerrada Temporalmente'
+def print_line_status(line, line_status, problem_stations):
+    """Imprime el estado de una línea y los problemas, si existen."""
+    if problem_stations:
+        print(f'{colors[line]}{unidecode(line)}: {", ".join(problem_stations)} ⚠️')
+        print(f'{colors[line]}{unidecode(line)}: {line_status}')
+    else:
         print(f'{colors[line]}{unidecode(line)}: {line_status}')
 
-if len(problems) == 0:
-    print("Toda la red del metro está operativa.")
-else:
-    print(f"Problemas en las estaciones {' '.join(problems)}, más información en https://twitter.com/metrodesantiago")
+def main():
+    all_operational = True
+    all_problems = []
+
+    for line in lines:
+        line_result = soup.find('strong', string=line)
+        
+        if not line_result:
+            print(f"No se encontró información para {line}.")
+            continue
+        
+        station_results = line_result.find_next('ul').find_all('li')
+        if not station_results:
+            print(f"No se encontraron estaciones para {line}.")
+            continue
+        
+        line_status = 'Operativa'
+        problem_stations = []
+        
+        for station_result in station_results:
+            station_name = station_result.text.strip()
+            station_class = station_result['class'][0]
+            station_status = get_status(station_class)
+            
+            if station_status in ['Accesos Cerrados', 'Estación Cerrada Temporalmente']:
+                problem_stations.append(f'{station_name} - {station_status}')
+                if station_status == 'Estación Cerrada Temporalmente':
+                    line_status = 'Cerrada Temporalmente'
+        
+        print_line_status(line, line_status, problem_stations)
+        
+        if problem_stations:
+            all_operational = False
+            all_problems.extend(station.split(' - ')[0] for station in problem_stations)
+    
+    if all_operational:
+        print("Toda la red del metro está operativa.")
+    else:
+        print(f"Problemas en las estaciones {', '.join(set(all_problems))}, más información en https://twitter.com/metrodesantiago")
+
+if __name__ == '__main__':
+    main()
